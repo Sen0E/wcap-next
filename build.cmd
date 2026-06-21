@@ -29,12 +29,12 @@ where /Q cl.exe || (
 )
 
 if "%ARGS:debug=%" neq "%ARGS%" (
-  set CL=/MTd /Od /Z7 /D_DEBUG /RTC1
+  set CL=/MTd /Od /Z7 /D_DEBUG /RTC1 /utf-8
   set LINK=/DEBUG
   set FXC=/Od /Zi
   if "%TARGET_ARCH%" equ "x64" set CL=!CL! /fsanitize=address
 ) else (
-  set CL=/GL /O1 /Oi /DNDEBUG /GS-
+  set CL=/GL /O1 /Oi /DNDEBUG /GS- /utf-8
   set LINK=/NOCOFFGRPINFO /EMITTOOLVERSIONINFO:NO /LTCG /OPT:REF /OPT:ICF ucrt.lib libvcruntime.lib
   set FXC=/O3 /Qstrip_reflect /Qstrip_debug /Qstrip_priv
 )
