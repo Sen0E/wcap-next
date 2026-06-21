@@ -31,3 +31,5 @@ jobs:
         with:
           name: wcap
           path: repo\wcap-*.exe
+
+      # Note: exe is built in repo root from src/*.c and res/*.rc

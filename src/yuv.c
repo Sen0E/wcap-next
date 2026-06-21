@@ -1,58 +1,10 @@
-#pragma once
-
-#include "wcap.h"
-#include <d3d11.h>
-
-//
-// interface
-//
-
-typedef struct
-{
-	ID3D11Texture2D* Texture;
-	ID3D11ShaderResourceView* ViewInUV;
-	ID3D11UnorderedAccessView* ViewOutUV;
-	ID3D11UnorderedAccessView* ViewOutY;
-}
-YuvConvertOutput;
-
-typedef struct
-{
-	ID3D11ShaderResourceView* InputView;
-	ID3D11ComputeShader* SinglePass;
-	ID3D11ComputeShader* Pass1;
-	ID3D11ComputeShader* Pass2;
-	ID3D11Buffer* ConstantBuffer;
-	uint32_t Width;
-	uint32_t Height;
-}
-YuvConvert;
-
-typedef enum
-{
-	YuvColorSpace_BT601,
-	YuvColorSpace_BT709,
-	YuvColorSpace_BT2020,
-}
-YuvColorSpace;
-
-static void YuvConvertOutput_Create(YuvConvertOutput* Output, ID3D11Device* Device, uint32_t Width, uint32_t Height, DXGI_FORMAT Format);
-static void YuvConvertOutput_Release(YuvConvertOutput* Output);
-
-static void YuvConvert_Create(YuvConvert* Convert, ID3D11Device* Device, ID3D11Texture2D* InputTexture, uint32_t Width, uint32_t Height, YuvColorSpace ColorSpace, bool ImprovedConversion);
-static void YuvConvert_Release(YuvConvert* Convert);
-
-static void YuvConvert_Dispatch(YuvConvert* Convert, ID3D11DeviceContext* Context, YuvConvertOutput* Output);
-
-//
-// implementation
-//
+#include "yuv.h"
 
 #include <d3dcompiler.h>
 
-#include "shaders/ConvertSinglePass.h"
-#include "shaders/ConvertPass1.h"
-#include "shaders/ConvertPass2.h"
+#include "../shaders/ConvertSinglePass.h"
+#include "../shaders/ConvertPass1.h"
+#include "../shaders/ConvertPass2.h"
 
 void YuvConvertOutput_Create(YuvConvertOutput* Output, ID3D11Device* Device, uint32_t Width, uint32_t Height, DXGI_FORMAT Format)
 {
@@ -188,7 +140,7 @@ void YuvConvert_Create(YuvConvert* Convert, ID3D11Device* Device, ID3D11Texture2
 		HR(D3DDecompressShaders(ConvertPass2ShaderBytes, sizeof(ConvertPass2ShaderBytes), 1, 0, NULL, 0, &Shader, NULL));
 		ID3D11Device_CreateComputeShader(Device, ID3D10Blob_GetBufferPointer(Shader), ID3D10Blob_GetBufferSize(Shader), NULL, &Convert->Pass2);
 		ID3D10Blob_Release(Shader);
-		
+
 		Convert->SinglePass = NULL;
 	}
 	else
@@ -219,7 +171,7 @@ void YuvConvert_Release(YuvConvert* Convert)
 	}
 }
 
-static void YuvConvert_Dispatch(YuvConvert* Convert, ID3D11DeviceContext* Context, YuvConvertOutput* Output)
+void YuvConvert_Dispatch(YuvConvert* Convert, ID3D11DeviceContext* Context, YuvConvertOutput* Output)
 {
 	if (Convert->SinglePass)
 	{

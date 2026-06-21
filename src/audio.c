@@ -1,57 +1,7 @@
-#pragma once
+// Must be included before windows.h (via audio.h -> wcap.h) for GUID definitions
+#include <initguid.h>
 
-#include "wcap.h"
-#include <audioclient.h>
-
-//
-// interface
-//
-
-typedef struct
-{
-	IAudioClient* PlayClient;
-	IAudioClient* RecordClient;
-	IAudioCaptureClient* CaptureClient;
-	WAVEFORMATEX* Format;
-	uint64_t StartQpc;
-	uint64_t StartPos;
-	uint64_t Freq;
-	bool UseDeviceTimestamp;
-	bool CheckDeviceTimestamp;
-
-	bool Stop;
-	HANDLE Event;
-	HANDLE Thread;
-
-	uint8_t* Buffer;
-	uint32_t BufferSize;
-	_Atomic(uint32_t) BufferRead;
-	_Atomic(uint32_t) BufferWrite;
-}
-AudioCapture;
-
-typedef struct
-{
-	void* Samples;
-	size_t Count;
-	uint64_t Time; // compatible with QPC
-}
-AudioCaptureData;
-
-static bool AudioCapture_CanCaptureApplicationLocal(void);
-
-// make sure CoInitializeEx has been called before calling Start()
-static bool AudioCapture_Start(AudioCapture* Capture, HWND ApplicationWindow);
-static void AudioCapture_Stop(AudioCapture* Capture);
-static void AudioCapture_Flush(AudioCapture* Capture);
-
-// expectedTimestamp is used only first time GetData() is called to detect abnormal device timestamps
-static bool AudioCapture_GetData(AudioCapture* Capture, AudioCaptureData* Data, uint64_t ExpectedTimestamp);
-static void AudioCapture_ReleaseData(AudioCapture* Capture, AudioCaptureData* Data);
-
-//
-// implementation
-//
+#include "audio.h"
 
 #include <mmdeviceapi.h>
 #include <audioclientactivationparams.h>
@@ -154,7 +104,7 @@ static DWORD CALLBACK AudioCapture__Thread(LPVOID Arg)
 		DWORD Flags = 0;
 		UINT32 Frames = 0;
 		UINT64 Position = 0; // in sample count from beginning of stream
-		UINT64 Timestamp = 0; // in QPC unuts
+		UINT64 Timestamp = 0; // in QPC units
 		while (SUCCEEDED(IAudioCaptureClient_GetBuffer(CaptureClient, &Buffer, &Frames, &Flags, &Position, &Timestamp)) && Frames != 0)
 		{
 			uint32_t BufferAvailable = BufferSize - (BufferWrite - atomic_load_explicit(&Capture->BufferRead, memory_order_relaxed));
@@ -190,7 +140,7 @@ static DWORD CALLBACK AudioCapture__Thread(LPVOID Arg)
 			Timestamp = 0;
 		}
 	}
-	
+
 	AvRevertMmThreadCharacteristics(Handle);
 
 	return 0;
@@ -294,7 +244,7 @@ bool AudioCapture_Start(AudioCapture* Capture, HWND ApplicationWindow)
 			return false;
 		}
 
-		// setup playback for slience, otherwise loopback recording does not provide any data if nothing is playing
+		// setup playback for silence, otherwise loopback recording does not provide any data if nothing is playing
 		{
 			IAudioClient* Client;
 			HR(IMMDevice_Activate(Device, &IID_IAudioClient, CLSCTX_ALL, NULL, (void**)&Client));
@@ -349,7 +299,7 @@ bool AudioCapture_Start(AudioCapture* Capture, HWND ApplicationWindow)
 	{
 		// it seems process local loopback device does not use any buffering, even when we asked for 1 second of buffer
 		// so we must implement our own ringbuffer to be able to dequeue incoming data as fast as possible
-		
+
 		DWORD BufferSizeIndex;
 		_BitScanReverse(&BufferSizeIndex, max(65535, Capture->Format->nAvgBytesPerSec - 1));
 		uint32_t BufferSize = 1 << (BufferSizeIndex + 1);
@@ -461,7 +411,7 @@ bool AudioCapture_GetData(AudioCapture* Capture, AudioCaptureData* Data, uint64_
 
 	if (Capture->CheckDeviceTimestamp)
 	{
-		// first time we check if device timestamp is resonable - not more than 500 msec away from expected
+		// first time we check if device timestamp is reasonable - not more than 500 msec away from expected
 		if (ExpectedTimestamp)
 		{
 			const int64_t MaxDelta = 500 * Capture->Freq;

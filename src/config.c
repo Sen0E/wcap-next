@@ -1,79 +1,4 @@
-#pragma once
-
-#include "wcap.h"
-
-//
-// interface
-//
-
-#define CONFIG_VIDEO_H264 0
-#define CONFIG_VIDEO_H265 1
-#define CONFIG_VIDEO_AV1  2
-
-#define CONFIG_VIDEO_BASE    0
-#define CONFIG_VIDEO_MAIN    1
-#define CONFIG_VIDEO_HIGH    2
-#define CONFIG_VIDEO_MAIN_10 3
-
-#define CONFIG_AUDIO_AAC  0
-#define CONFIG_AUDIO_FLAC 1
-
-typedef struct
-{
-	// capture
-	BOOL MouseCursor;
-	BOOL OnlyClientArea;
-	BOOL ShowRecordingBorder;
-	BOOL KeepRoundedWindowCorners;
-	BOOL IncludeSecondaryWindows;
-	BOOL HardwareEncoder;
-	BOOL HardwarePreferIntegrated;
-	// output
-	WCHAR OutputFolder[MAX_PATH];
-	BOOL OpenFolder;
-	BOOL FragmentedOutput;
-	BOOL EnableLimitLength;
-	BOOL EnableLimitSize;
-	DWORD LimitLength;
-	DWORD LimitSize;
-	// video
-	BOOL GammaCorrectResize;
-	BOOL ImprovedColorConversion;
-	DWORD VideoCodec;
-	DWORD VideoProfile;
-	DWORD VideoMaxWidth;
-	DWORD VideoMaxHeight;
-	DWORD VideoMaxFramerate;
-	DWORD VideoBitrate;
-	// audio
-	BOOL CaptureAudio;
-	BOOL ApplicationLocalAudio;
-	DWORD AudioCodec;
-	DWORD AudioChannels;
-	DWORD AudioSamplerate;
-	DWORD AudioBitrate;
-	// shortcuts
-	DWORD ShortcutMonitor;
-	DWORD ShortcutWindow;
-	DWORD ShortcutRegion;
-}
-Config;
-
-#define HOT_KEY(Key, Mod) ((Key) | ((Mod) << 24))
-#define HOT_GET_KEY(KeyMod) ((KeyMod) & 0xffffff)
-#define HOT_GET_MOD(KeyMod) (((KeyMod) >> 24) & 0xff)
-
-static void Config_Defaults(Config* C);
-static void Config_Load(Config* C, LPCWSTR FileName);
-static void Config_Save(Config* C, LPCWSTR FileName);
-static BOOL Config_ShowDialog(Config* C);
-
-//
-// implementation
-//
-
-#include "wcap_screen_capture.h"
-#include "wcap_audio_capture.h"
+#include "config.h"
 
 #include <shlobj.h>
 #include <shlwapi.h>
@@ -91,6 +16,25 @@ static BOOL Config_ShowDialog(Config* C);
 static BOOL gConfigDarkMode;
 static HBRUSH gConfigDarkBrush;
 static HBRUSH gConfigDarkEditBrush;
+static HWND gDialogWindow;
+
+// current control to set shortcut
+static struct
+{
+	WNDPROC WindowProc;
+	Config* Config;
+	int Control;
+}
+gConfigShortcut;
+
+// Function pointers filled from ConfigCapabilities (passed to Config_ShowDialog)
+static bool gCanHideMouseCursor;
+static bool gCanHideRecordingBorder;
+static bool gCanDisableRoundedCorners;
+static bool gCanIncludeSecondaryWindows;
+static bool gCanCaptureApplicationLocal;
+static void (*gDisableHotKeys)(void);
+static BOOL (*gEnableHotKeys)(void);
 
 static BOOL Config__IsDarkMode(void)
 {
@@ -208,18 +152,6 @@ static const int gValidVideoProfiles[][4] =
 	{ CONFIG_VIDEO_MAIN, CONFIG_VIDEO_MAIN_10, -1 },
 	{ CONFIG_VIDEO_MAIN, CONFIG_VIDEO_MAIN_10, -1 },
 };
-
-// currently open dialog window
-static HWND gDialogWindow;
-
-// current control to set shortcut
-struct
-{
-	WNDPROC WindowProc;
-	Config* Config;
-	int Control;
-}
-static gConfigShortcut;
 
 static void Config__UpdateVideoProfiles(HWND Window, DWORD Codec)
 {
@@ -428,15 +360,13 @@ static void Config__SetDialogValues(HWND Window, Config* C)
 	EnableWindow(GetDlgItem(Window, ID_LIMIT_LENGTH + 1), C->EnableLimitLength);
 	EnableWindow(GetDlgItem(Window, ID_LIMIT_SIZE + 1),   C->EnableLimitSize);
 
-	EnableWindow(GetDlgItem(Window, ID_MOUSE_CURSOR),              ScreenCapture_CanHideMouseCursor());
-	EnableWindow(GetDlgItem(Window, ID_SHOW_RECORDING_BORDER),     ScreenCapture_CanHideRecordingBorder());
-	EnableWindow(GetDlgItem(Window, ID_ROUNDED_CORNERS),           ScreenCapture_CanDisableRoundedCorners());
-	EnableWindow(GetDlgItem(Window, ID_INCLUDE_SECONDARY_WINDOWS), ScreenCapture_CanIncludeSecondaryWindows());
-	EnableWindow(GetDlgItem(Window, ID_AUDIO_APPLICATION_LOCAL),   AudioCapture_CanCaptureApplicationLocal());
+	// Use capabilities from caller instead of direct module calls
+	EnableWindow(GetDlgItem(Window, ID_MOUSE_CURSOR),              gCanHideMouseCursor);
+	EnableWindow(GetDlgItem(Window, ID_SHOW_RECORDING_BORDER),     gCanHideRecordingBorder);
+	EnableWindow(GetDlgItem(Window, ID_ROUNDED_CORNERS),           gCanDisableRoundedCorners);
+	EnableWindow(GetDlgItem(Window, ID_INCLUDE_SECONDARY_WINDOWS), gCanIncludeSecondaryWindows);
+	EnableWindow(GetDlgItem(Window, ID_AUDIO_APPLICATION_LOCAL),   gCanCaptureApplicationLocal);
 }
-
-void DisableHotKeys(void);
-BOOL EnableHotKeys(void);
 
 static LRESULT CALLBACK Config__ShortcutProc(HWND Window, UINT Message, WPARAM WParam, LPARAM LParam)
 {
@@ -486,7 +416,7 @@ static LRESULT CALLBACK Config__ShortcutProc(HWND Window, UINT Message, WPARAM W
 
 			SetWindowLongPtrW(Window, GWLP_WNDPROC, (LONG_PTR)gConfigShortcut.WindowProc);
 			gConfigShortcut.Control = 0;
-			EnableHotKeys();
+			if (gEnableHotKeys) gEnableHotKeys();
 			return FALSE;
 		}
 	}
@@ -691,7 +621,7 @@ static LRESULT CALLBACK Config__DialogProc(HWND Window, UINT Message, WPARAM WPa
 			{
 				SetWindowLongPtrW(GetDlgItem(Window, gConfigShortcut.Control), GWLP_WNDPROC, (LONG_PTR)gConfigShortcut.WindowProc);
 				gConfigShortcut.Control = 0;
-				EnableHotKeys();
+				if (gEnableHotKeys) gEnableHotKeys();
 			}
 			return TRUE;
 		}
@@ -767,7 +697,7 @@ static LRESULT CALLBACK Config__DialogProc(HWND Window, UINT Message, WPARAM WPa
 				HWND ControlWindow = GetDlgItem(Window, Control);
 				gConfigShortcut.WindowProc = (WNDPROC)GetWindowLongPtrW(ControlWindow, GWLP_WNDPROC);
 				SetWindowLongPtrW(ControlWindow, GWLP_WNDPROC, (LONG_PTR)&Config__ShortcutProc);
-				DisableHotKeys();
+				if (gDisableHotKeys) gDisableHotKeys();
 			}
 		}
 	}
@@ -922,7 +852,7 @@ static void Config__DoDialogLayout(const Config__DialogLayout* Layout, BYTE* Dat
 			{
 				if (!OnlyCheckbox)
 				{
-					// reduce width so checbox can fit other control on the right
+					// reduce width so checkbox can fit other control on the right
 					ItemW = Item->Width;
 				}
 				Data = Config__DoDialogItem(Data, Item->Text, ItemId, CONTROL_BUTTON, WS_TABSTOP | BS_AUTOCHECKBOX, ItemX, Y, ItemW, ITEM_HEIGHT);
@@ -1188,13 +1118,22 @@ void Config_Save(Config* C, LPCWSTR FileName)
 	Config__WriteInt(FileName, L"ShortcutRect",    C->ShortcutRegion);
 }
 
-BOOL Config_ShowDialog(Config* C)
+BOOL Config_ShowDialog(Config* C, const ConfigCapabilities* Cap)
 {
 	if (gDialogWindow)
 	{
 		SetForegroundWindow(gDialogWindow);
 		return FALSE;
 	}
+
+	// Store capabilities for use by dialog callbacks
+	gCanHideMouseCursor          = Cap->CanHideMouseCursor;
+	gCanHideRecordingBorder      = Cap->CanHideRecordingBorder;
+	gCanDisableRoundedCorners    = Cap->CanDisableRoundedCorners;
+	gCanIncludeSecondaryWindows  = Cap->CanIncludeSecondaryWindows;
+	gCanCaptureApplicationLocal  = Cap->CanCaptureApplicationLocal;
+	gDisableHotKeys              = Cap->DisableHotKeys;
+	gEnableHotKeys               = Cap->EnableHotKeys;
 
 	Config__DialogLayout Dialog = (Config__DialogLayout)
 	{
@@ -1252,7 +1191,7 @@ BOOL Config_ShowDialog(Config* C)
 				.Items = (Config__DialogItem[])
 				{
 					{ "录制声音(&D)",               ID_AUDIO_CAPTURE,           ITEM_CHECKBOX     },
-					{ "应用内音频(&N)",           ID_AUDIO_APPLICATION_LOCAL, ITEM_CHECKBOX     },
+					{ "应用内音频(&N)",             ID_AUDIO_APPLICATION_LOCAL, ITEM_CHECKBOX     },
 					{ "编码器",                     ID_AUDIO_CODEC,             ITEM_COMBOBOX, 60 },
 					{ "声道",                       ID_AUDIO_CHANNELS,          ITEM_COMBOBOX, 60 },
 					{ "采样率",                     ID_AUDIO_SAMPLERATE,        ITEM_COMBOBOX, 60 },
