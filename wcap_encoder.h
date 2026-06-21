@@ -425,7 +425,7 @@ BOOL Encoder_Start(Encoder* Encoder, ID3D11Device* Device, LPWSTR FileName, cons
 
 		if (!Ok)
 		{
-			MessageBoxW(NULL, L"Cannot find video encoder!", WCAP_TITLE, MB_ICONERROR);
+			MessageBoxW(NULL, L"找不到视频编码器！", WCAP_TITLE, MB_ICONERROR);
 			goto bail;
 		}
 	}
@@ -459,7 +459,7 @@ BOOL Encoder_Start(Encoder* Encoder, ID3D11Device* Device, LPWSTR FileName, cons
 
 		if (FAILED(hr))
 		{
-			MessageBoxW(NULL, L"Cannot create output mp4 file!", WCAP_TITLE, MB_ICONERROR);
+			MessageBoxW(NULL, L"无法创建 MP4 输出文件！", WCAP_TITLE, MB_ICONERROR);
 			goto bail;
 		}
 	}
@@ -487,7 +487,7 @@ BOOL Encoder_Start(Encoder* Encoder, ID3D11Device* Device, LPWSTR FileName, cons
 
 		if (FAILED(hr))
 		{
-			MessageBoxW(NULL, L"Cannot configure video encoder!", WCAP_TITLE, MB_ICONERROR);
+			MessageBoxW(NULL, L"无法配置视频编码器！", WCAP_TITLE, MB_ICONERROR);
 			goto bail;
 		}
 	}
@@ -507,7 +507,7 @@ BOOL Encoder_Start(Encoder* Encoder, ID3D11Device* Device, LPWSTR FileName, cons
 
 		if (FAILED(hr))
 		{
-			MessageBoxW(NULL, L"Cannot configure video encoder input!", WCAP_TITLE, MB_ICONERROR);
+			MessageBoxW(NULL, L"无法配置视频编码器输入！", WCAP_TITLE, MB_ICONERROR);
 			goto bail;
 		}
 	}
@@ -595,7 +595,7 @@ BOOL Encoder_Start(Encoder* Encoder, ID3D11Device* Device, LPWSTR FileName, cons
 
 			if (FAILED(hr))
 			{
-				MessageBoxW(NULL, L"Cannot configure audio encoder output!", WCAP_TITLE, MB_ICONERROR);
+				MessageBoxW(NULL, L"无法配置音频编码器输出！", WCAP_TITLE, MB_ICONERROR);
 				goto bail;
 			}
 		}
@@ -615,7 +615,7 @@ BOOL Encoder_Start(Encoder* Encoder, ID3D11Device* Device, LPWSTR FileName, cons
 
 			if (FAILED(hr))
 			{
-				MessageBoxW(NULL, L"Cannot configure audio encoder input!", WCAP_TITLE, MB_ICONERROR);
+				MessageBoxW(NULL, L"无法配置音频编码器输入！", WCAP_TITLE, MB_ICONERROR);
 				goto bail;
 			}
 		}
@@ -624,7 +624,7 @@ BOOL Encoder_Start(Encoder* Encoder, ID3D11Device* Device, LPWSTR FileName, cons
 	hr = IMFSinkWriter_BeginWriting(Writer);
 	if (FAILED(hr))
 	{
-		MessageBoxW(NULL, L"Cannot start writing to mp4 file!", WCAP_TITLE, MB_ICONERROR);
+		MessageBoxW(NULL, L"无法开始写入 MP4 文件！", WCAP_TITLE, MB_ICONERROR);
 		goto bail;
 	}
 

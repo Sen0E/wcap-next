@@ -184,9 +184,9 @@ static void Config__UpdateVideoProfiles(HWND Window, DWORD Codec)
 
 	if (Codec == CONFIG_VIDEO_H264)
 	{
-		ComboBox_AddString(Control, L"Base");
-		ComboBox_AddString(Control, L"Main");
-		ComboBox_AddString(Control, L"High");
+		ComboBox_AddString(Control, L"基础");
+		ComboBox_AddString(Control, L"常规");
+		ComboBox_AddString(Control, L"高质量");
 
 		ComboBox_SetItemData(Control, 0, CONFIG_VIDEO_BASE);
 		ComboBox_SetItemData(Control, 1, CONFIG_VIDEO_MAIN);
@@ -195,8 +195,8 @@ static void Config__UpdateVideoProfiles(HWND Window, DWORD Codec)
 	}
 	else if (Codec == CONFIG_VIDEO_H265)
 	{
-		ComboBox_AddString(Control, L"Main (8-bit)");
-		ComboBox_AddString(Control, L"Main10 (10-bit)");
+		ComboBox_AddString(Control, L"8-bit");
+		ComboBox_AddString(Control, L"10-bit");
 
 		ComboBox_SetItemData(Control, 0, CONFIG_VIDEO_MAIN);
 		ComboBox_SetItemData(Control, 1, CONFIG_VIDEO_MAIN_10);
@@ -204,8 +204,8 @@ static void Config__UpdateVideoProfiles(HWND Window, DWORD Codec)
 	}
 	else if (Codec == CONFIG_VIDEO_AV1)
 	{
-		ComboBox_AddString(Control, L"Main (8-bit)");
-		ComboBox_AddString(Control, L"Main (10-bit)");
+		ComboBox_AddString(Control, L"8-bit");
+		ComboBox_AddString(Control, L"10-bit");
 
 		ComboBox_SetItemData(Control, 0, CONFIG_VIDEO_MAIN);
 		ComboBox_SetItemData(Control, 1, CONFIG_VIDEO_MAIN_10);
@@ -256,7 +256,7 @@ static void Config__UpdateAudioBitrate(HWND Window, DWORD Codec, DWORD AudioBitr
 	}
 	else if (Codec == CONFIG_AUDIO_FLAC)
 	{
-		ComboBox_AddString(Control, L"auto");
+		ComboBox_AddString(Control, L"自动");
 		ComboBox_SetCurSel(Control, 0);
 	}
 }
@@ -265,7 +265,7 @@ static void Config__FormatKey(DWORD KeyMod, WCHAR* Text)
 {
 	if (KeyMod == 0)
 	{
-		StrCpyW(Text, L"[none]");
+		StrCpyW(Text, L"[无]");
 		return;
 	}
 
@@ -470,8 +470,8 @@ static LRESULT CALLBACK Config__DialogProc(HWND Window, UINT Message, WPARAM WPa
 		SendDlgItemMessageW(Window, ID_AUDIO_SAMPLERATE, CB_ADDSTRING, 0, (LPARAM)L"44100");
 		SendDlgItemMessageW(Window, ID_AUDIO_SAMPLERATE, CB_ADDSTRING, 0, (LPARAM)L"48000");
 
-		SendDlgItemMessageW(Window, ID_GPU_ENCODER + 1, CB_ADDSTRING, 0, (LPARAM)L"Prefer iGPU");
-		SendDlgItemMessageW(Window, ID_GPU_ENCODER + 1, CB_ADDSTRING, 0, (LPARAM)L"Prefer dGPU");
+		SendDlgItemMessageW(Window, ID_GPU_ENCODER + 1, CB_ADDSTRING, 0, (LPARAM)L"优先核显");
+		SendDlgItemMessageW(Window, ID_GPU_ENCODER + 1, CB_ADDSTRING, 0, (LPARAM)L"优先独显");
 
 		Config__SetDialogValues(Window, C);
 
@@ -616,7 +616,7 @@ static LRESULT CALLBACK Config__DialogProc(HWND Window, UINT Message, WPARAM WPa
 		{
 			if (gConfigShortcut.Control == 0)
 			{
-				SetDlgItemTextW(Window, Control, L"Press new shortcut, [ESC] to cancel, [BACKSPACE] to disable");
+				SetDlgItemTextW(Window, Control, L"按下新快捷键，[ESC] 取消，[BACKSPACE] 禁用");
 
 				gConfigShortcut.Control = Control;
 				gConfigShortcut.Config = C;
@@ -738,15 +738,15 @@ static void Config__DoDialogLayout(const Config__DialogLayout* Layout, BYTE* Dat
 	int ButtonY = PADDING + ROW0H + ROW1H + ROW2H + PADDING;
 
 	DLGITEMTEMPLATE* OkData = Config__Align(Data, sizeof(DWORD));
-	Data = Config__DoDialogItem(Data, "OK", ID_OK, CONTROL_BUTTON, WS_TABSTOP | BS_DEFPUSHBUTTON, ButtonX, ButtonY, BUTTON_WIDTH, ITEM_HEIGHT);
+	Data = Config__DoDialogItem(Data, "确定", ID_OK, CONTROL_BUTTON, WS_TABSTOP | BS_DEFPUSHBUTTON, ButtonX, ButtonY, BUTTON_WIDTH, ITEM_HEIGHT);
 	ButtonX += BUTTON_WIDTH + PADDING;
 
 	DLGITEMTEMPLATE* CancelData = Config__Align(Data, sizeof(DWORD));
-	Data = Config__DoDialogItem(Data, "Cancel", ID_CANCEL, CONTROL_BUTTON, WS_TABSTOP | BS_PUSHBUTTON, ButtonX, ButtonY, BUTTON_WIDTH, ITEM_HEIGHT);
+	Data = Config__DoDialogItem(Data, "取消", ID_CANCEL, CONTROL_BUTTON, WS_TABSTOP | BS_PUSHBUTTON, ButtonX, ButtonY, BUTTON_WIDTH, ITEM_HEIGHT);
 	ButtonX += BUTTON_WIDTH + PADDING;
 
 	DLGITEMTEMPLATE* DefaultsData = Config__Align(Data, sizeof(DWORD));
-	Data = Config__DoDialogItem(Data, "Defaults", ID_DEFAULTS, CONTROL_BUTTON, WS_TABSTOP | BS_PUSHBUTTON, ButtonX, ButtonY, BUTTON_WIDTH, ITEM_HEIGHT);
+	Data = Config__DoDialogItem(Data, "默认值", ID_DEFAULTS, CONTROL_BUTTON, WS_TABSTOP | BS_PUSHBUTTON, ButtonX, ButtonY, BUTTON_WIDTH, ITEM_HEIGHT);
 	ButtonX += BUTTON_WIDTH + PADDING;
 
 	for (const Config__DialogGroup* Group = Layout->Groups; Group->Caption; Group++)
@@ -1056,75 +1056,75 @@ BOOL Config_ShowDialog(Config* C)
 	Config__DialogLayout Dialog = (Config__DialogLayout)
 	{
 		.Title = WCAP_CONFIG_TITLE,
-		.Font = "Segoe UI",
+		.Font = "Microsoft YaHei UI",
 		.FontSize = 9,
 		.Groups = (Config__DialogGroup[])
 		{
 			{
-				.Caption = "Capture",
+				.Caption = "捕获",
 				.Rect = { 0, 0, COL00W, ROW0H },
 				.Items = (Config__DialogItem[])
 				{
-					{ "&Mouse Cursor",                ID_MOUSE_CURSOR,              ITEM_CHECKBOX                     },
-					{ "Only &Client Area",            ID_ONLY_CLIENT_AREA,          ITEM_CHECKBOX                     },
-					{ "Show Recording &Border",       ID_SHOW_RECORDING_BORDER,     ITEM_CHECKBOX                     },
-					{ "Keep &Rounded Window Corners", ID_ROUNDED_CORNERS,           ITEM_CHECKBOX                     },
-					{ "Include Secondar&y Windows",   ID_INCLUDE_SECONDARY_WINDOWS, ITEM_CHECKBOX                     },
-					{ "GPU &Encoder",                 ID_GPU_ENCODER,               ITEM_CHECKBOX | ITEM_COMBOBOX, 50 },
+					{ "鼠标光标(&M)",                ID_MOUSE_CURSOR,              ITEM_CHECKBOX                     },
+					{ "仅客户区(&C)",                ID_ONLY_CLIENT_AREA,          ITEM_CHECKBOX                     },
+					{ "显示录制边框(&B)",            ID_SHOW_RECORDING_BORDER,     ITEM_CHECKBOX                     },
+					{ "保持圆角窗口(&R)",            ID_ROUNDED_CORNERS,           ITEM_CHECKBOX                     },
+					{ "包含辅助窗口(&Y)",            ID_INCLUDE_SECONDARY_WINDOWS, ITEM_CHECKBOX                     },
+					{ "GPU 编码器(&E)",              ID_GPU_ENCODER,               ITEM_CHECKBOX | ITEM_COMBOBOX, 50 },
 					{ NULL },
 				},
 			},
 			{
-				.Caption = "&Output",
+				.Caption = "输出(&O)",
 				.Rect = { COL00W + PADDING, 0, COL01W, ROW0H },
 				.Items = (Config__DialogItem[])
 				{
 					{ "",                            ID_OUTPUT_FOLDER,  ITEM_FOLDER                     },
-					{ "O&pen When Finished",         ID_OPEN_FOLDER,    ITEM_CHECKBOX                   },
-					{ "Fragmented MP&4 (H264 only)", ID_FRAGMENTED_MP4, ITEM_CHECKBOX                   },
-					{ "Limit &Length (seconds)",     ID_LIMIT_LENGTH,   ITEM_CHECKBOX | ITEM_NUMBER, 80 },
-					{ "Limit &Size (MB)",            ID_LIMIT_SIZE,     ITEM_CHECKBOX | ITEM_NUMBER, 80 },
+					{ "完成后打开(&P)",              ID_OPEN_FOLDER,    ITEM_CHECKBOX                   },
+					{ "分片 MP4（仅 H264）(&4)",     ID_FRAGMENTED_MP4, ITEM_CHECKBOX                   },
+					{ "限制时长（秒）(&L)",          ID_LIMIT_LENGTH,   ITEM_CHECKBOX | ITEM_NUMBER, 80 },
+					{ "限制大小（MB）(&S)",          ID_LIMIT_SIZE,     ITEM_CHECKBOX | ITEM_NUMBER, 80 },
 					{ NULL },
 				},
 			},
 			{
-				.Caption = "&Video",
+				.Caption = "视频(&V)",
 				.Rect = { 0, ROW0H, COL10W, ROW1H },
 				.Items = (Config__DialogItem[])
 				{
-					{ "&Gamma Correct Resize",      ID_VIDEO_GAMMA_RESIZE ,    ITEM_CHECKBOX     },
-					{ "&Improved Color Conversion", ID_VIDEO_IMPROVED_CONVERT, ITEM_CHECKBOX     },
-					{ "Codec",                      ID_VIDEO_CODEC,            ITEM_COMBOBOX, 64 },
-					{ "Profile",                    ID_VIDEO_PROFILE,          ITEM_COMBOBOX, 64 },
-					{ "Max &Width",                 ID_VIDEO_MAX_WIDTH,        ITEM_NUMBER,   64 },
-					{ "Max &Height",                ID_VIDEO_MAX_HEIGHT,       ITEM_NUMBER,   64 },
-					{ "Max &Framerate",             ID_VIDEO_MAX_FRAMERATE,    ITEM_NUMBER,   64 },
-					{ "Bitrate (kbit/s)",           ID_VIDEO_BITRATE,          ITEM_NUMBER,   64 },
+					{ "Gamma 正确缩放(&G)",        ID_VIDEO_GAMMA_RESIZE ,    ITEM_CHECKBOX     },
+					{ "改进颜色转换(&I)",           ID_VIDEO_IMPROVED_CONVERT, ITEM_CHECKBOX     },
+					{ "编码器",                     ID_VIDEO_CODEC,            ITEM_COMBOBOX, 64 },
+					{ "配置",                       ID_VIDEO_PROFILE,          ITEM_COMBOBOX, 64 },
+					{ "最大宽度(&W)",               ID_VIDEO_MAX_WIDTH,        ITEM_NUMBER,   64 },
+					{ "最大高度(&H)",               ID_VIDEO_MAX_HEIGHT,       ITEM_NUMBER,   64 },
+					{ "最大帧率(&F)",               ID_VIDEO_MAX_FRAMERATE,    ITEM_NUMBER,   64 },
+					{ "码率 (kbit/s)",              ID_VIDEO_BITRATE,          ITEM_NUMBER,   64 },
 					{ NULL },
 				},
 			},
 			{
-				.Caption = "&Audio",
+				.Caption = "音频(&A)",
 				.Rect = { COL10W + PADDING, ROW0H, COL11W, ROW1H },
 				.Items = (Config__DialogItem[])
 				{
-					{ "Capture Au&dio",           ID_AUDIO_CAPTURE,           ITEM_CHECKBOX     },
-					{ "Applicatio&n Local Audio", ID_AUDIO_APPLICATION_LOCAL, ITEM_CHECKBOX     },
-					{ "Codec",                    ID_AUDIO_CODEC,             ITEM_COMBOBOX, 60 },
-					{ "Channels",                 ID_AUDIO_CHANNELS,          ITEM_COMBOBOX, 60 },
-					{ "Samplerate",               ID_AUDIO_SAMPLERATE,        ITEM_COMBOBOX, 60 },
-					{ "Bitrate (kbit/s)",         ID_AUDIO_BITRATE,           ITEM_COMBOBOX, 60 },
+					{ "捕获音频(&D)",               ID_AUDIO_CAPTURE,           ITEM_CHECKBOX     },
+					{ "应用本地音频(&N)",           ID_AUDIO_APPLICATION_LOCAL, ITEM_CHECKBOX     },
+					{ "编码器",                     ID_AUDIO_CODEC,             ITEM_COMBOBOX, 60 },
+					{ "声道",                       ID_AUDIO_CHANNELS,          ITEM_COMBOBOX, 60 },
+					{ "采样率",                     ID_AUDIO_SAMPLERATE,        ITEM_COMBOBOX, 60 },
+					{ "码率 (kbit/s)",              ID_AUDIO_BITRATE,           ITEM_COMBOBOX, 60 },
 					{ NULL },
 				},
 			},
 			{
-				.Caption = "Shor&tcuts",
+				.Caption = "快捷键(&T)",
 				.Rect = { 0, ROW0H + ROW1H, COL00W + PADDING + COL01W, ROW2H },
 				.Items = (Config__DialogItem[])
 				{
-					{ "Capture Monitor", ID_SHORTCUT_MONITOR, ITEM_HOTKEY, 64 },
-					{ "Capture Window",  ID_SHORTCUT_WINDOW,  ITEM_HOTKEY, 64 },
-					{ "Capture Region",  ID_SHORTCUT_REGION,  ITEM_HOTKEY, 64 },
+					{ "录制显示器", ID_SHORTCUT_MONITOR, ITEM_HOTKEY, 64 },
+					{ "录制窗口",   ID_SHORTCUT_WINDOW,  ITEM_HOTKEY, 64 },
+					{ "录制区域",   ID_SHORTCUT_REGION,  ITEM_HOTKEY, 64 },
 					{ NULL },
 				},
 			},

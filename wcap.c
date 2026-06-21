@@ -72,7 +72,7 @@ __declspec(dllexport) DWORD NvOptimusEnablement = 1;
 #define WCAP_RESIZE_B    8
 #define WCAP_RESIZE_BR   9
 
-#define WCAP_UI_FONT      L"Segoe UI"
+#define WCAP_UI_FONT      L"Microsoft YaHei UI"
 #define WCAP_UI_FONT_SIZE 16
 
 #define WCAP_RECT_BORDER 2
@@ -204,7 +204,7 @@ static void StartRecording(ID3D11Device* Device, HWND Window)
 	int Error = SHCreateDirectoryExW(NULL, gConfig.OutputFolder, NULL);
 	if (Error != ERROR_SUCCESS && Error != ERROR_FILE_EXISTS && Error != ERROR_ALREADY_EXISTS)
 	{
-		ShowNotification(L"Cannot create output folder!", L"Cannot Start Recording", NIIF_WARNING);
+		ShowNotification(L"无法创建输出文件夹！", L"无法开始录制", NIIF_WARNING);
 		ScreenCapture_Stop(&gCapture);
 		ID3D11Device_Release(Device);
 		return;
@@ -247,7 +247,7 @@ static void StartRecording(ID3D11Device* Device, HWND Window)
 		HWND ApplicationWindow = gConfig.ApplicationLocalAudio && AudioCapture_CanCaptureApplicationLocal() ? Window : NULL;
 		if (!AudioCapture_Start(&gAudio, ApplicationWindow))
 		{
-			ShowNotification(L"Cannot capture audio!", L"Cannot Start Recording", NIIF_WARNING);
+			ShowNotification(L"无法捕获音频！", L"无法开始录制", NIIF_WARNING);
 			ScreenCapture_Stop(&gCapture);
 			ID3D11Device_Release(Device);
 			return;
@@ -392,7 +392,7 @@ static ID3D11Device* CreateDevice(void)
 	D3D_DRIVER_TYPE Driver = Adapter ? D3D_DRIVER_TYPE_UNKNOWN : D3D_DRIVER_TYPE_HARDWARE;
 	if (FAILED(D3D11CreateDevice(Adapter, Driver, NULL, flags, (D3D_FEATURE_LEVEL[]) { D3D_FEATURE_LEVEL_11_0 }, 1, D3D11_SDK_VERSION, &Device, NULL, NULL)))
 	{
-		ShowNotification(L"Cannot to create D3D11 device!", L"Error", NIIF_ERROR);
+		ShowNotification(L"无法创建 D3D11 设备！", L"错误", NIIF_ERROR);
 		Device = NULL;
 	}
 	if (Adapter)
@@ -419,7 +419,7 @@ static void CaptureWindow(void)
 	HWND Window = GetForegroundWindow();
 	if (Window == NULL)
 	{
-		ShowNotification(L"No window is selected!", L"Cannot Start Recording", NIIF_WARNING);
+		ShowNotification(L"未选择窗口！", L"无法开始录制", NIIF_WARNING);
 		return;
 	}
 
@@ -437,14 +437,14 @@ static void CaptureWindow(void)
 
 	if (Affinity != WDA_NONE)
 	{
-		ShowNotification(L"Window is excluded from capture!", L"Cannot Start Recording", NIIF_WARNING);
+		ShowNotification(L"窗口已被排除在捕获之外！", L"无法开始录制", NIIF_WARNING);
 		return;
 	}
 
 	LONG ExStyle = GetWindowLongW(Window, GWL_EXSTYLE);
 	if (ExStyle & WS_EX_TOOLWINDOW)
 	{
-		ShowNotification(L"Cannot capture toolbar window!", L"Cannot Start Recording", NIIF_WARNING);
+		ShowNotification(L"无法捕获工具栏窗口！", L"无法开始录制", NIIF_WARNING);
 		return;
 	}
 
@@ -457,7 +457,7 @@ static void CaptureWindow(void)
 	if (!ScreenCapture_CreateForWindow(&gCapture, Device, Window, gConfig.OnlyClientArea, !gConfig.KeepRoundedWindowCorners))
 	{
 		ID3D11Device_Release(Device);
-		ShowNotification(L"Cannot record selected window!", L"Error", NIIF_WARNING);
+		ShowNotification(L"无法录制所选窗口！", L"错误", NIIF_WARNING);
 		return;
 	}
 
@@ -472,7 +472,7 @@ static void CaptureMonitor(void)
 	HMONITOR Monitor = MonitorFromPoint(Mouse, MONITOR_DEFAULTTONULL);
 	if (Monitor == NULL)
 	{
-		ShowNotification(L"Unknown monitor!", L"Cannot Start Recording", NIIF_WARNING);
+		ShowNotification(L"未知显示器！", L"无法开始录制", NIIF_WARNING);
 		return;
 	}
 
@@ -484,7 +484,7 @@ static void CaptureMonitor(void)
 
 	if (!ScreenCapture_CreateForMonitor(&gCapture, Device, Monitor, NULL))
 	{
-		ShowNotification(L"Cannot record selected monitor!", L"Error", NIIF_WARNING);
+		ShowNotification(L"无法录制所选显示器！", L"错误", NIIF_WARNING);
 		return;
 	}
 
@@ -499,7 +499,7 @@ static void CaptureRegionInit(void)
 	HMONITOR Monitor = MonitorFromPoint(Mouse, MONITOR_DEFAULTTONULL);
 	if (Monitor == NULL)
 	{
-		ShowNotification(L"Unknown monitor!", L"Cannot Start Recording", NIIF_WARNING);
+		ShowNotification(L"未知显示器！", L"无法开始录制", NIIF_WARNING);
 		return;
 	}
 
@@ -509,7 +509,7 @@ static void CaptureRegionInit(void)
 	HDC DeviceContext = CreateDCW(L"DISPLAY", Info.szDevice, NULL, NULL);
 	if (DeviceContext == NULL)
 	{
-		ShowNotification(L"Error getting HDC of monitor!", L"Cannot Start Recording", NIIF_WARNING);
+		ShowNotification(L"获取显示器 HDC 失败！", L"无法开始录制", NIIF_WARNING);
 		return;
 	}
 
@@ -623,7 +623,7 @@ static void CaptureRegion(void)
 
 	if (!ScreenCapture_CreateForMonitor(&gCapture, Device, gRectMonitor, &Rect))
 	{
-		ShowNotification(L"Cannot record monitor!", L"Error", NIIF_WARNING);
+		ShowNotification(L"无法录制显示器！", L"错误", NIIF_WARNING);
 		CaptureRegionRelease();
 		return;
 	}
@@ -991,8 +991,8 @@ static LRESULT CALLBACK WindowProc(HWND Window, UINT Message, WPARAM WParam, LPA
 
 			AppendMenuW(Menu, MF_STRING, CMD_WCAP, WCAP_TITLE);
 			AppendMenuW(Menu, MF_SEPARATOR, 0, NULL);
-			AppendMenuW(Menu, MF_STRING | (gRecording ? MF_DISABLED : 0), CMD_SETTINGS, L"Settings");
-			AppendMenuW(Menu, MF_STRING, CMD_QUIT, L"Exit");
+			AppendMenuW(Menu, MF_STRING | (gRecording ? MF_DISABLED : 0), CMD_SETTINGS, L"设置");
+			AppendMenuW(Menu, MF_STRING, CMD_QUIT, L"退出");
 
 			POINT Mouse;
 			GetCursorPos(&Mouse);
@@ -1085,7 +1085,7 @@ static LRESULT CALLBACK WindowProc(HWND Window, UINT Message, WPARAM WParam, LPA
 			StrFormatByteSizeW(FileSize, SizeText, _countof(SizeText));
 
 			WCHAR Text[1024];
-			StrFormat(Text, L"Recording: %dx%d @ %.2f\nLength: %ls\nBitrate: %u kbit/s\nSize: %ls\nFramedrop: %u",
+			StrFormat(Text, L"录制中: %dx%d @ %.2f\n时长: %ls\n码率: %u kbit/s\n大小: %ls\n丢帧: %u",
 				gEncoder.OutputWidth, gEncoder.OutputHeight,
 				(float)gEncoder.FramerateNum / (float)gEncoder.FramerateDen,
 				LengthText,
@@ -1107,7 +1107,7 @@ static LRESULT CALLBACK WindowProc(HWND Window, UINT Message, WPARAM WParam, LPA
 	}
 	else if (Message == WM_WCAP_ALREADY_RUNNING)
 	{
-		ShowNotification(L"wcap is already running!", NULL, NIIF_INFO);
+		ShowNotification(L"wcap 已在运行！", NULL, NIIF_INFO);
 		return 0;
 	}
 	else if (Message == WM_TASKBARCREATED)
@@ -1166,7 +1166,7 @@ static LRESULT CALLBACK WindowProc(HWND Window, UINT Message, WPARAM WParam, LPA
 					SetTextAlign(Context, TA_BOTTOM | TA_LEFT);
 					SetTextColor(Context, RGB(255, 255, 255));
 
-					const WCHAR TextResize[] = L"Resize:  ";
+					const WCHAR TextResize[] = L"调整大小:  ";
 
 					SIZE Size;
 					GetTextExtentPoint32W(Context, TextResize, _countof(TextResize) - 1, &Size);
@@ -1209,8 +1209,8 @@ static LRESULT CALLBACK WindowProc(HWND Window, UINT Message, WPARAM WParam, LPA
 					SelectObject(Context, GetStockObject(DC_PEN));
 					SelectObject(Context, GetStockObject(DC_BRUSH));
 
-					const WCHAR Line1[] = L"Select region with the mouse and press ENTER to start capture.";
-					const WCHAR Line2[] = L"Press ESC to cancel.";
+					const WCHAR Line1[] = L"用鼠标选择区域，按回车键开始录制。";
+					const WCHAR Line2[] = L"按 ESC 键取消。";
 
 					const WCHAR* Lines[] = { Line1, Line2 };
 					const int LineLengths[] = { _countof(Line1) - 1, _countof(Line2) - 1 };
@@ -1395,7 +1395,7 @@ void WinMainCRTStartup()
 
 	if (!ScreenCapture_IsSupported())
 	{
-		MessageBoxW(NULL, L"Windows 10 Version 1903, May 2019 Update (19H1) or newer is required!", WCAP_TITLE, MB_ICONEXCLAMATION);
+		MessageBoxW(NULL, L"需要 Windows 10 1903 版本（2019年5月更新）或更高版本！", WCAP_TITLE, MB_ICONEXCLAMATION);
 		ExitProcess(0);
 	}
 
@@ -1451,7 +1451,7 @@ void WinMainCRTStartup()
 	if (!EnableHotKeys())
 	{
 		MessageBoxW(NULL,
-			L"Cannot register wcap keyboard shortcuts.\nSome other application might already use shorcuts.\nPlease check & adjust the settings!",
+			L"无法注册 wcap 快捷键。\n可能已有其他程序使用了这些快捷键。\n请检查并调整设置！",
 			WCAP_TITLE, MB_ICONEXCLAMATION);
 	}
 
