@@ -28,7 +28,6 @@
 #define WCAP_VIDEO_UPDATE_INTERVAL  100 // msec
 
 // Tray menu commands
-#define CMD_WCAP     1
 #define CMD_QUIT     2
 #define CMD_SETTINGS 3
 

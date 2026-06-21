@@ -4,7 +4,6 @@
 #include <dwmapi.h>
 #include <shlobj.h>
 #include <shlwapi.h>
-#include <shellapi.h>
 #include <windowsx.h>
 #include <uxtheme.h>
 
@@ -888,8 +887,6 @@ static LRESULT CALLBACK App_WindowProc(HWND Window, UINT Message, WPARAM WParam,
 			HMENU Menu = CreatePopupMenu();
 			Assert(Menu);
 
-			AppendMenuW(Menu, MF_STRING, CMD_WCAP, WCAP_TITLE);
-			AppendMenuW(Menu, MF_SEPARATOR, 0, NULL);
 			AppendMenuW(Menu, MF_STRING | (App->Recording ? MF_DISABLED : 0), CMD_SETTINGS, L"设置");
 			AppendMenuW(Menu, MF_STRING, CMD_QUIT, L"退出");
 
@@ -898,11 +895,7 @@ static LRESULT CALLBACK App_WindowProc(HWND Window, UINT Message, WPARAM WParam,
 
 			SetForegroundWindow(Window);
 			int Command = TrackPopupMenu(Menu, TPM_RETURNCMD | TPM_NONOTIFY, Mouse.x, Mouse.y, 0, Window, NULL);
-			if (Command == CMD_WCAP)
-			{
-				ShellExecuteW(NULL, L"open", WCAP_URL, NULL, NULL, SW_SHOWNORMAL);
-			}
-			else if (Command == CMD_QUIT)
+			if (Command == CMD_QUIT)
 			{
 				DestroyWindow(Window);
 			}
@@ -928,7 +921,7 @@ static LRESULT CALLBACK App_WindowProc(HWND Window, UINT Message, WPARAM WParam,
 
 			DestroyMenu(Menu);
 		}
-		else if (LOWORD(LParam) == WM_LBUTTONDBLCLK)
+		else if (LOWORD(LParam) == WM_LBUTTONUP)
 		{
 			if (!App->Recording)
 			{
