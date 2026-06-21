@@ -603,13 +603,24 @@ static LRESULT CALLBACK App_WindowProc(HWND Window, UINT Message, WPARAM WParam,
 {
 	AppState* App = App_FromWindow(Window);
 
-	if (Message == WM_CREATE)
+	// WM_NCCREATE is the very first message — set up AppState before any other message
+	if (Message == WM_NCCREATE)
 	{
 		App = (AppState*)((CREATESTRUCTW*)LParam)->lpCreateParams;
 		SetWindowLongPtrW(Window, GWLP_USERDATA, (LONG_PTR)App);
 		App->Window = Window;
 		gApp = App;
+		return DefWindowProcW(Window, Message, WParam, LParam);
+	}
 
+	// Guard against messages that might arrive before WM_NCCREATE sets App
+	if (!App)
+	{
+		return DefWindowProcW(Window, Message, WParam, LParam);
+	}
+
+	if (Message == WM_CREATE)
+	{
 		HR(BufferedPaintInit());
 		UI_AddTrayIcon(Window, App->IconIdle, WM_WCAP_COMMAND);
 		return 0;
