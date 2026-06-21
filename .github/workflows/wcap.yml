@@ -27,3 +27,9 @@ jobs:
       # - name: Build (arm64)
       #   shell: cmd
       #   run: cd repo && build.cmd arm64
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: wcap
+          path: repo\wcap-*.exe
