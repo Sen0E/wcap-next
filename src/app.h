@@ -8,6 +8,7 @@
 #include "ui.h"
 
 #include <d3d11.h>
+#include <dxgi1_6.h>
 
 //
 // Application orchestration module — recording state machine, capture entries

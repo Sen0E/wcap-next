@@ -1,6 +1,5 @@
 #include "app.h"
 
-#include <dxgi1_6.h>
 #include <d3d11.h>
 #include <dwmapi.h>
 #include <shlobj.h>
