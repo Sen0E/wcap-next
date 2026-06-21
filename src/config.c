@@ -66,13 +66,11 @@ static void Config__ApplyDarkMode(HWND Window)
 	BOOL value = gConfigDarkMode ? TRUE : FALSE;
 	DwmSetWindowAttribute(Window, DWMWA_USE_IMMERSIVE_DARK_MODE, &value, sizeof(value));
 
-	if (gConfigDarkMode)
-	{
-		// L"Explorer" auto-adapts to system dark mode and correctly
-		// colors all control text, backgrounds, and borders.
-		SetWindowTheme(Window, L"Explorer", NULL);
-		EnumChildWindows(Window, Config__ApplyDarkToChild, 0);
-	}
+	// L"Explorer" must be applied unconditionally — the theme auto-adapts
+	// to the system dark/light setting.  If we only apply it when dark,
+	// controls won't update when the user switches back to light mode.
+	SetWindowTheme(Window, L"Explorer", NULL);
+	EnumChildWindows(Window, Config__ApplyDarkToChild, 0);
 }
 
 // control id's
@@ -486,46 +484,6 @@ static LRESULT CALLBACK Config__DialogProc(HWND Window, UINT Message, WPARAM WPa
 		if (gConfigDarkMode)
 		{
 			return (LRESULT)gConfigDarkBrush;
-		}
-	}
-	else if (Message == WM_CTLCOLORSTATIC)
-	{
-		if (gConfigDarkMode)
-		{
-			HDC hdc = (HDC)WParam;
-			SetTextColor(hdc, RGB(220, 220, 220));
-			SetBkColor(hdc, RGB(32, 32, 32));
-			return (LRESULT)gConfigDarkBrush;
-		}
-	}
-	else if (Message == WM_CTLCOLOREDIT)
-	{
-		if (gConfigDarkMode)
-		{
-			HDC hdc = (HDC)WParam;
-			SetTextColor(hdc, RGB(220, 220, 220));
-			SetBkColor(hdc, RGB(50, 50, 50));
-			return (LRESULT)gConfigDarkEditBrush;
-		}
-	}
-	else if (Message == WM_CTLCOLORBTN)
-	{
-		if (gConfigDarkMode)
-		{
-			HDC hdc = (HDC)WParam;
-			SetTextColor(hdc, RGB(220, 220, 220));
-			SetBkColor(hdc, RGB(32, 32, 32));
-			return (LRESULT)gConfigDarkBrush;
-		}
-	}
-	else if (Message == WM_CTLCOLORLISTBOX)
-	{
-		if (gConfigDarkMode)
-		{
-			HDC hdc = (HDC)WParam;
-			SetTextColor(hdc, RGB(220, 220, 220));
-			SetBkColor(hdc, RGB(50, 50, 50));
-			return (LRESULT)gConfigDarkEditBrush;
 		}
 	}
 	else if (Message == WM_SETTINGCHANGE)
