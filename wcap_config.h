@@ -597,7 +597,22 @@ static LRESULT CALLBACK Config__DialogProc(HWND Window, UINT Message, WPARAM WPa
 	{
 		if (WParam == 0 && lstrcmpW((LPCWSTR)LParam, L"ImmersiveColorSet") == 0)
 		{
+			BOOL wasDark = gConfigDarkMode;
 			Config__ApplyDarkMode(Window);
+
+			if (gConfigDarkMode != wasDark)
+			{
+				if (gConfigDarkMode)
+				{
+					if (!gConfigDarkBrush) gConfigDarkBrush = CreateSolidBrush(RGB(32, 32, 32));
+					if (!gConfigDarkEditBrush) gConfigDarkEditBrush = CreateSolidBrush(RGB(50, 50, 50));
+				}
+				else
+				{
+					if (gConfigDarkBrush) { DeleteObject(gConfigDarkBrush); gConfigDarkBrush = NULL; }
+					if (gConfigDarkEditBrush) { DeleteObject(gConfigDarkEditBrush); gConfigDarkEditBrush = NULL; }
+				}
+			}
 			InvalidateRect(Window, NULL, TRUE);
 		}
 	}
@@ -605,6 +620,17 @@ static LRESULT CALLBACK Config__DialogProc(HWND Window, UINT Message, WPARAM WPa
 	{
 		Config* C = (Config*)GetWindowLongPtrW(Window, GWLP_USERDATA);
 		int Control = LOWORD(WParam);
+
+		// apply dark theme to combo box dropdown listboxes (popup windows, not reached by EnumChildWindows)
+		if (HIWORD(WParam) == CBN_DROPDOWN && gConfigDarkMode)
+		{
+			COMBOBOXINFO cbi = { sizeof(COMBOBOXINFO) };
+			if (GetComboBoxInfo((HWND)LParam, &cbi) && cbi.hwndList)
+			{
+				SetWindowTheme(cbi.hwndList, L"DarkMode_Explorer", NULL);
+			}
+		}
+
 		if (Control == ID_OK)
 		{
 			// capture
