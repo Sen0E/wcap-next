@@ -79,8 +79,44 @@ static BOOL Config_ShowDialog(Config* C);
 #include <shlwapi.h>
 #include <knownfolders.h>
 #include <windowsx.h>
+#include <dwmapi.h>
+#include <uxtheme.h>
+
+#ifndef DWMWA_USE_IMMERSIVE_DARK_MODE
+#define DWMWA_USE_IMMERSIVE_DARK_MODE 20
+#endif
 
 #define INI_SECTION L"wcap"
+
+static BOOL gConfigDarkMode;
+static HBRUSH gConfigDarkBrush;
+static HBRUSH gConfigDarkEditBrush;
+
+static BOOL Config__IsDarkMode(void)
+{
+	HKEY hKey;
+	DWORD appsUseLightTheme = 1;
+	if (RegOpenKeyExW(HKEY_CURRENT_USER, L"Software\\Microsoft\\Windows\\CurrentVersion\\Themes\\Personalize", 0, KEY_READ, &hKey) == ERROR_SUCCESS)
+	{
+		DWORD dataSize = sizeof(DWORD);
+		RegQueryValueExW(hKey, L"AppsUseLightTheme", NULL, NULL, (LPBYTE)&appsUseLightTheme, &dataSize);
+		RegCloseKey(hKey);
+	}
+	return appsUseLightTheme == 0;
+}
+
+static void Config__ApplyDarkMode(HWND Window)
+{
+	gConfigDarkMode = Config__IsDarkMode();
+
+	BOOL value = gConfigDarkMode ? TRUE : FALSE;
+	DwmSetWindowAttribute(Window, DWMWA_USE_IMMERSIVE_DARK_MODE, &value, sizeof(value));
+
+	if (gConfigDarkMode)
+	{
+		SetWindowTheme(Window, L"DarkMode_Explorer", NULL);
+	}
+}
 
 // control id's
 #define ID_OK                      IDOK     // 1
@@ -457,6 +493,14 @@ static LRESULT CALLBACK Config__DialogProc(HWND Window, UINT Message, WPARAM WPa
 		Config* C = (Config*)LParam;
 		SetWindowLongPtrW(Window, GWLP_USERDATA, (LONG_PTR)C);
 
+		Config__ApplyDarkMode(Window);
+
+		if (gConfigDarkMode)
+		{
+			gConfigDarkBrush = CreateSolidBrush(RGB(32, 32, 32));
+			gConfigDarkEditBrush = CreateSolidBrush(RGB(50, 50, 50));
+		}
+
 		SendDlgItemMessageW(Window, ID_VIDEO_CODEC, CB_ADDSTRING, 0, (LPARAM)L"H264 / AVC");
 		SendDlgItemMessageW(Window, ID_VIDEO_CODEC, CB_ADDSTRING, 0, (LPARAM)L"H265 / HEVC");
 		SendDlgItemMessageW(Window, ID_VIDEO_CODEC, CB_ADDSTRING, 0, (LPARAM)L"AV1");
@@ -482,7 +526,72 @@ static LRESULT CALLBACK Config__DialogProc(HWND Window, UINT Message, WPARAM WPa
 	}
 	else if (Message == WM_DESTROY)
 	{
+		if (gConfigDarkBrush)
+		{
+			DeleteObject(gConfigDarkBrush);
+			gConfigDarkBrush = NULL;
+		}
+		if (gConfigDarkEditBrush)
+		{
+			DeleteObject(gConfigDarkEditBrush);
+			gConfigDarkEditBrush = NULL;
+		}
 		gDialogWindow = NULL;
+	}
+	else if (Message == WM_CTLCOLORDLG)
+	{
+		if (gConfigDarkMode)
+		{
+			return (LRESULT)gConfigDarkBrush;
+		}
+	}
+	else if (Message == WM_CTLCOLORSTATIC)
+	{
+		if (gConfigDarkMode)
+		{
+			HDC hdc = (HDC)WParam;
+			SetTextColor(hdc, RGB(220, 220, 220));
+			SetBkColor(hdc, RGB(32, 32, 32));
+			return (LRESULT)gConfigDarkBrush;
+		}
+	}
+	else if (Message == WM_CTLCOLOREDIT)
+	{
+		if (gConfigDarkMode)
+		{
+			HDC hdc = (HDC)WParam;
+			SetTextColor(hdc, RGB(220, 220, 220));
+			SetBkColor(hdc, RGB(50, 50, 50));
+			return (LRESULT)gConfigDarkEditBrush;
+		}
+	}
+	else if (Message == WM_CTLCOLORBTN)
+	{
+		if (gConfigDarkMode)
+		{
+			HDC hdc = (HDC)WParam;
+			SetTextColor(hdc, RGB(220, 220, 220));
+			SetBkColor(hdc, RGB(32, 32, 32));
+			return (LRESULT)gConfigDarkBrush;
+		}
+	}
+	else if (Message == WM_CTLCOLORLISTBOX)
+	{
+		if (gConfigDarkMode)
+		{
+			HDC hdc = (HDC)WParam;
+			SetTextColor(hdc, RGB(220, 220, 220));
+			SetBkColor(hdc, RGB(50, 50, 50));
+			return (LRESULT)gConfigDarkEditBrush;
+		}
+	}
+	else if (Message == WM_SETTINGCHANGE)
+	{
+		if (WParam == 0 && lstrcmpW((LPCWSTR)LParam, L"ImmersiveColorSet") == 0)
+		{
+			Config__ApplyDarkMode(Window);
+			InvalidateRect(Window, NULL, TRUE);
+		}
 	}
 	else if (Message == WM_COMMAND)
 	{

@@ -36,6 +36,7 @@
 #pragma comment (lib, "uxtheme")
 #pragma comment (lib, "OneCore")
 #pragma comment (lib, "CoreMessaging")
+#pragma comment (lib, "advapi32")
 
 #if defined(_M_AMD64)
 // this is needed to be able to use Nvidia Media Foundation encoders on Optimus systems
