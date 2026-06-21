@@ -1,3 +1,6 @@
+// Define GUIDs in this TU — all other TUs get extern declarations
+#include <initguid.h>
+
 #include "app.h"
 
 #ifndef NDEBUG
