@@ -65,6 +65,52 @@ static LRESULT CALLBACK Config__ComboProc(HWND Window, UINT Message, WPARAM WPar
 	return CallWindowProcW(gConfigComboOrigProc, Window, Message, WParam, LParam);
 }
 
+// Subclassed checkbox original proc for dark mode.
+// We must draw text ourselves because the button window proc always
+// overrides the DC text color with GetSysColor(COLOR_BTNTEXT), making
+// WM_CTLCOLORBTN's SetTextColor ineffective for checkboxes.
+static WNDPROC gConfigCheckboxOrigProc;
+
+static LRESULT CALLBACK Config__CheckboxProc(HWND Window, UINT Message, WPARAM WParam, LPARAM LParam)
+{
+	// Let the original proc handle everything (theme draws the
+	// checkbox square beautifully in dark mode).
+	LRESULT Result = CallWindowProcW(gConfigCheckboxOrigProc, Window, Message, WParam, LParam);
+
+	// Then overdraw the text with our light color.
+	if ((Message == WM_PAINT || Message == WM_PRINTCLIENT) && gConfigDarkMode)
+	{
+		WCHAR Text[256];
+		int TextLen = GetWindowTextW(Window, Text, _countof(Text));
+		if (TextLen > 0)
+		{
+			HDC hdc = (Message == WM_PRINTCLIENT) ? (HDC)WParam : GetDC(Window);
+			if (hdc)
+			{
+				RECT Rect;
+				GetClientRect(Window, &Rect);
+
+				HFONT Font = (HFONT)SendMessageW(Window, WM_GETFONT, 0, 0);
+				HFONT OldFont = Font ? SelectObject(hdc, Font) : NULL;
+
+				BOOL Disabled = !IsWindowEnabled(Window);
+				SetTextColor(hdc, Disabled ? RGB(128, 128, 128) : RGB(220, 220, 220));
+				SetBkMode(hdc, TRANSPARENT);
+
+				// text is to the right of the checkbox square
+				Rect.left += GetSystemMetrics(SM_CXMENUCHECK) + 4;
+
+				DrawTextW(hdc, Text, TextLen, &Rect, DT_LEFT | DT_VCENTER | DT_SINGLELINE);
+
+				if (OldFont) SelectObject(hdc, OldFont);
+				if (Message == WM_PAINT) ReleaseDC(Window, hdc);
+			}
+		}
+	}
+
+	return Result;
+}
+
 // Function pointers filled from ConfigCapabilities (passed to Config_ShowDialog)
 static bool gCanHideMouseCursor;
 static bool gCanHideRecordingBorder;
@@ -96,14 +142,20 @@ static BOOL CALLBACK Config__ApplyDarkToChild(HWND Child, LPARAM lParam)
 	{
 		if (StrCmpW(ClassName, L"Button") == 0)
 		{
-			// Don't theme checkboxes — themed buttons ignore
-			// WM_CTLCOLORBTN SetTextColor, causing black text on
-			// some Windows builds. Classic-mode checkboxes respect
-			// the DC text color.
 			LONG Style = GetWindowLongW(Child, GWL_STYLE);
 			DWORD BtnType = Style & 0x0F; // BS_TYPEMASK
 			if (BtnType == BS_AUTOCHECKBOX || BtnType == BS_CHECKBOX)
 			{
+				// Theme the checkbox square, then subclass so we
+				// can overdraw the text in the correct light color.
+				// (WM_CTLCOLORBTN SetTextColor is ignored because
+				// the button proc always uses COLOR_BTNTEXT.)
+				SetWindowTheme(Child, L"DarkMode_Explorer", NULL);
+				if (!gConfigCheckboxOrigProc)
+				{
+					gConfigCheckboxOrigProc = (WNDPROC)GetWindowLongPtrW(Child, GWLP_WNDPROC);
+				}
+				SetWindowLongPtrW(Child, GWLP_WNDPROC, (LONG_PTR)Config__CheckboxProc);
 				return TRUE;
 			}
 		}
@@ -548,6 +600,7 @@ static LRESULT CALLBACK Config__DialogProc(HWND Window, UINT Message, WPARAM WPa
 		gDialogWindow = NULL;
 			gConfigListBoxOrigProc = NULL;
 			gConfigComboOrigProc = NULL;
+			gConfigCheckboxOrigProc = NULL;
 	}
 	else if (Message == WM_CTLCOLORDLG)
 	{
