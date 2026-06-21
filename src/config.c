@@ -13,6 +13,8 @@
 
 #define INI_SECTION L"wcap"
 
+static BOOL gConfigDarkMode;
+static HBRUSH gConfigDarkBrush;
 static HWND gDialogWindow;
 
 // current control to set shortcut
@@ -58,7 +60,9 @@ static BOOL CALLBACK Config__ApplyDarkToChild(HWND Child, LPARAM lParam)
 
 static void Config__ApplyDarkMode(HWND Window)
 {
-	BOOL value = Config__IsDarkMode() ? TRUE : FALSE;
+	gConfigDarkMode = Config__IsDarkMode();
+
+	BOOL value = gConfigDarkMode ? TRUE : FALSE;
 	DwmSetWindowAttribute(Window, DWMWA_USE_IMMERSIVE_DARK_MODE, &value, sizeof(value));
 
 	// L"Explorer" must be applied unconditionally — the theme auto-adapts
@@ -430,7 +434,10 @@ static LRESULT CALLBACK Config__DialogProc(HWND Window, UINT Message, WPARAM WPa
 		SetWindowLongPtrW(Window, GWLP_USERDATA, (LONG_PTR)C);
 
 		Config__ApplyDarkMode(Window);
-
+		if (gConfigDarkMode)
+		{
+			gConfigDarkBrush = CreateSolidBrush(RGB(32, 32, 32));
+		}
 
 		SendDlgItemMessageW(Window, ID_VIDEO_CODEC, CB_ADDSTRING, 0, (LPARAM)L"H264 / AVC");
 		SendDlgItemMessageW(Window, ID_VIDEO_CODEC, CB_ADDSTRING, 0, (LPARAM)L"H265 / HEVC");
@@ -457,13 +464,40 @@ static LRESULT CALLBACK Config__DialogProc(HWND Window, UINT Message, WPARAM WPa
 	}
 	else if (Message == WM_DESTROY)
 	{
+		if (gConfigDarkBrush)
+		{
+			DeleteObject(gConfigDarkBrush);
+			gConfigDarkBrush = NULL;
+		}
 		gDialogWindow = NULL;
+	}
+	else if (Message == WM_CTLCOLORDLG)
+	{
+		if (gConfigDarkMode)
+		{
+			return (LRESULT)gConfigDarkBrush;
+		}
 	}
 	else if (Message == WM_SETTINGCHANGE)
 	{
 		if (WParam == 0 && lstrcmpW((LPCWSTR)LParam, L"ImmersiveColorSet") == 0)
 		{
+			BOOL wasDark = gConfigDarkMode;
 			Config__ApplyDarkMode(Window);
+
+			if (gConfigDarkMode != wasDark)
+			{
+				if (gConfigDarkMode)
+				{
+					if (!gConfigDarkBrush)
+						gConfigDarkBrush = CreateSolidBrush(RGB(32, 32, 32));
+				}
+				else
+				{
+					if (gConfigDarkBrush)
+						{ DeleteObject(gConfigDarkBrush); gConfigDarkBrush = NULL; }
+				}
+			}
 			InvalidateRect(Window, NULL, TRUE);
 		}
 	}
