@@ -47,22 +47,49 @@ static WNDPROC gConfigComboOrigProc;
 
 static LRESULT CALLBACK Config__ComboProc(HWND Window, UINT Message, WPARAM WParam, LPARAM LParam)
 {
-	if (Message == WM_ERASEBKGND)
+	// Let the theme draw the dark body + dropdown button.
+	LRESULT Result = CallWindowProcW(gConfigComboOrigProc, Window, Message, WParam, LParam);
+
+	// Then overdraw the selected-item text in light color.
+	if ((Message == WM_PAINT || Message == WM_PRINTCLIENT) && gConfigDarkMode)
 	{
-		RECT Rect;
-		GetClientRect(Window, &Rect);
-		FillRect((HDC)WParam, &Rect, gConfigDarkBrush);
-		return 1;
+		int Index = (int)SendMessageW(Window, CB_GETCURSEL, 0, 0);
+		if (Index >= 0)
+		{
+			WCHAR Text[256];
+			if (SendMessageW(Window, CB_GETLBTEXT, (WPARAM)Index, (LPARAM)Text) != CB_ERR)
+			{
+				HDC hdc = (Message == WM_PRINTCLIENT) ? (HDC)WParam : GetDC(Window);
+				if (hdc)
+				{
+					RECT Rect;
+					GetClientRect(Window, &Rect);
+
+					// leave room for the dropdown button on the right
+					int BtnW = GetSystemMetrics(SM_CXVSCROLL);
+					Rect.right -= BtnW + 2;
+					Rect.left += 3;
+					Rect.top += 2;
+					Rect.bottom -= 2;
+
+					// fill the text area background (theme may leave it light)
+					FillRect(hdc, &Rect, gConfigDarkBrush);
+
+					HFONT Font = (HFONT)SendMessageW(Window, WM_GETFONT, 0, 0);
+					HFONT OldFont = Font ? SelectObject(hdc, Font) : NULL;
+
+					SetTextColor(hdc, RGB(220, 220, 220));
+					SetBkMode(hdc, TRANSPARENT);
+					DrawTextW(hdc, Text, -1, &Rect, DT_LEFT | DT_VCENTER | DT_SINGLELINE);
+
+					if (OldFont) SelectObject(hdc, OldFont);
+					if (Message == WM_PAINT) ReleaseDC(Window, hdc);
+				}
+			}
+		}
 	}
-	if (Message == WM_CTLCOLORSTATIC)
-	{
-		// Color the combo's internal static (selected item text display)
-		HDC hdc = (HDC)WParam;
-		SetTextColor(hdc, RGB(220, 220, 220));
-		SetBkColor(hdc, RGB(32, 32, 32));
-		return (LRESULT)gConfigDarkBrush;
-	}
-	return CallWindowProcW(gConfigComboOrigProc, Window, Message, WParam, LParam);
+
+	return Result;
 }
 
 // Subclassed checkbox original proc for dark mode.
@@ -111,6 +138,42 @@ static LRESULT CALLBACK Config__CheckboxProc(HWND Window, UINT Message, WPARAM W
 	return Result;
 }
 
+// Subclassed group-box proc for dark mode — same pattern as checkbox:
+// the button proc overrides the DC text color, so we overdraw the caption.
+static WNDPROC gConfigGroupBoxOrigProc;
+
+static LRESULT CALLBACK Config__GroupBoxProc(HWND Window, UINT Message, WPARAM WParam, LPARAM LParam)
+{
+	LRESULT Result = CallWindowProcW(gConfigGroupBoxOrigProc, Window, Message, WParam, LParam);
+
+	if ((Message == WM_PAINT || Message == WM_PRINTCLIENT) && gConfigDarkMode)
+	{
+		WCHAR Text[256];
+		int TextLen = GetWindowTextW(Window, Text, _countof(Text));
+		if (TextLen > 0)
+		{
+			HDC hdc = (Message == WM_PRINTCLIENT) ? (HDC)WParam : GetDC(Window);
+			if (hdc)
+			{
+				HFONT Font = (HFONT)SendMessageW(Window, WM_GETFONT, 0, 0);
+				HFONT OldFont = Font ? SelectObject(hdc, Font) : NULL;
+
+				SetTextColor(hdc, RGB(220, 220, 220));
+				SetBkMode(hdc, TRANSPARENT);
+
+				// caption is at the top-left, inside the frame gap
+				RECT R = { 8, 0, 256, 20 };
+				DrawTextW(hdc, Text, TextLen, &R, DT_LEFT | DT_TOP | DT_SINGLELINE);
+
+				if (OldFont) SelectObject(hdc, OldFont);
+				if (Message == WM_PAINT) ReleaseDC(Window, hdc);
+			}
+		}
+	}
+
+	return Result;
+}
+
 // Function pointers filled from ConfigCapabilities (passed to Config_ShowDialog)
 static bool gCanHideMouseCursor;
 static bool gCanHideRecordingBorder;
@@ -143,35 +206,45 @@ static BOOL CALLBACK Config__ApplyDarkToChild(HWND Child, LPARAM lParam)
 		if (StrCmpW(ClassName, L"Button") == 0)
 		{
 			LONG Style = GetWindowLongW(Child, GWL_STYLE);
-			DWORD BtnType = Style & 0x0F; // BS_TYPEMASK
+			DWORD BtnType = Style & 0x0F;
 			if (BtnType == BS_AUTOCHECKBOX || BtnType == BS_CHECKBOX)
 			{
-				// Theme the checkbox square, then subclass so we
-				// can overdraw the text in the correct light color.
-				// (WM_CTLCOLORBTN SetTextColor is ignored because
-				// the button proc always uses COLOR_BTNTEXT.)
 				SetWindowTheme(Child, L"DarkMode_Explorer", NULL);
 				if (!gConfigCheckboxOrigProc)
-				{
 					gConfigCheckboxOrigProc = (WNDPROC)GetWindowLongPtrW(Child, GWLP_WNDPROC);
-				}
 				SetWindowLongPtrW(Child, GWLP_WNDPROC, (LONG_PTR)Config__CheckboxProc);
+				return TRUE;
+			}
+			if (BtnType == BS_GROUPBOX)
+			{
+				SetWindowTheme(Child, L"DarkMode_Explorer", NULL);
+				if (!gConfigGroupBoxOrigProc)
+					gConfigGroupBoxOrigProc = (WNDPROC)GetWindowLongPtrW(Child, GWLP_WNDPROC);
+				SetWindowLongPtrW(Child, GWLP_WNDPROC, (LONG_PTR)Config__GroupBoxProc);
 				return TRUE;
 			}
 		}
 		else if (StrCmpW(ClassName, L"ComboBox") == 0)
 		{
-			// Don't theme the combo body — on some Windows builds
-			// the theme leaves the display area light-colored.
-			// Subclass it so WM_CTLCOLORSTATIC from its internal
-			// static gets dark colors. The dropdown list is themed
-			// separately via CBN_DROPDOWN.
+			// Theme the body + dropdown button, then subclass to
+			// overdraw the selected-item text in light color.
+			SetWindowTheme(Child, L"DarkMode_Explorer", NULL);
 			if (!gConfigComboOrigProc)
-			{
 				gConfigComboOrigProc = (WNDPROC)GetWindowLongPtrW(Child, GWLP_WNDPROC);
-			}
 			SetWindowLongPtrW(Child, GWLP_WNDPROC, (LONG_PTR)Config__ComboProc);
 			return TRUE;
+		}
+		else if (StrCmpW(ClassName, L"Edit") == 0)
+		{
+			// WS_BORDER draws a thin line that stays light in dark
+			// mode; remove it and let the theme provide the border.
+			LONG EditStyle = GetWindowLongW(Child, GWL_STYLE);
+			if (EditStyle & WS_BORDER)
+			{
+				SetWindowLongW(Child, GWL_STYLE, EditStyle & ~WS_BORDER);
+				SetWindowPos(Child, NULL, 0, 0, 0, 0,
+					SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_FRAMECHANGED);
+			}
 		}
 	}
 
@@ -601,6 +674,7 @@ static LRESULT CALLBACK Config__DialogProc(HWND Window, UINT Message, WPARAM WPa
 			gConfigListBoxOrigProc = NULL;
 			gConfigComboOrigProc = NULL;
 			gConfigCheckboxOrigProc = NULL;
+			gConfigGroupBoxOrigProc = NULL;
 	}
 	else if (Message == WM_CTLCOLORDLG)
 	{
