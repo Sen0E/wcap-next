@@ -13,9 +13,6 @@
 
 #define INI_SECTION L"wcap"
 
-static BOOL gConfigDarkMode;
-static HBRUSH gConfigDarkBrush;
-static HBRUSH gConfigDarkEditBrush;
 static HWND gDialogWindow;
 
 // current control to set shortcut
@@ -61,9 +58,7 @@ static BOOL CALLBACK Config__ApplyDarkToChild(HWND Child, LPARAM lParam)
 
 static void Config__ApplyDarkMode(HWND Window)
 {
-	gConfigDarkMode = Config__IsDarkMode();
-
-	BOOL value = gConfigDarkMode ? TRUE : FALSE;
+	BOOL value = Config__IsDarkMode() ? TRUE : FALSE;
 	DwmSetWindowAttribute(Window, DWMWA_USE_IMMERSIVE_DARK_MODE, &value, sizeof(value));
 
 	// L"Explorer" must be applied unconditionally — the theme auto-adapts
@@ -436,11 +431,6 @@ static LRESULT CALLBACK Config__DialogProc(HWND Window, UINT Message, WPARAM WPa
 
 		Config__ApplyDarkMode(Window);
 
-		if (gConfigDarkMode)
-		{
-			gConfigDarkBrush = CreateSolidBrush(RGB(32, 32, 32));
-			gConfigDarkEditBrush = CreateSolidBrush(RGB(50, 50, 50));
-		}
 
 		SendDlgItemMessageW(Window, ID_VIDEO_CODEC, CB_ADDSTRING, 0, (LPARAM)L"H264 / AVC");
 		SendDlgItemMessageW(Window, ID_VIDEO_CODEC, CB_ADDSTRING, 0, (LPARAM)L"H265 / HEVC");
@@ -467,45 +457,13 @@ static LRESULT CALLBACK Config__DialogProc(HWND Window, UINT Message, WPARAM WPa
 	}
 	else if (Message == WM_DESTROY)
 	{
-		if (gConfigDarkBrush)
-		{
-			DeleteObject(gConfigDarkBrush);
-			gConfigDarkBrush = NULL;
-		}
-		if (gConfigDarkEditBrush)
-		{
-			DeleteObject(gConfigDarkEditBrush);
-			gConfigDarkEditBrush = NULL;
-		}
 		gDialogWindow = NULL;
-	}
-	else if (Message == WM_CTLCOLORDLG)
-	{
-		if (gConfigDarkMode)
-		{
-			return (LRESULT)gConfigDarkBrush;
-		}
 	}
 	else if (Message == WM_SETTINGCHANGE)
 	{
 		if (WParam == 0 && lstrcmpW((LPCWSTR)LParam, L"ImmersiveColorSet") == 0)
 		{
-			BOOL wasDark = gConfigDarkMode;
 			Config__ApplyDarkMode(Window);
-
-			if (gConfigDarkMode != wasDark)
-			{
-				if (gConfigDarkMode)
-				{
-					if (!gConfigDarkBrush) gConfigDarkBrush = CreateSolidBrush(RGB(32, 32, 32));
-					if (!gConfigDarkEditBrush) gConfigDarkEditBrush = CreateSolidBrush(RGB(50, 50, 50));
-				}
-				else
-				{
-					if (gConfigDarkBrush) { DeleteObject(gConfigDarkBrush); gConfigDarkBrush = NULL; }
-					if (gConfigDarkEditBrush) { DeleteObject(gConfigDarkEditBrush); gConfigDarkEditBrush = NULL; }
-				}
-			}
 			InvalidateRect(Window, NULL, TRUE);
 		}
 	}
