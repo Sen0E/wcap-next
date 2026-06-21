@@ -67,6 +67,25 @@ static BOOL Config__IsDarkMode(void)
 static BOOL CALLBACK Config__ApplyDarkToChild(HWND Child, LPARAM lParam)
 {
 	(void)lParam;
+
+	WCHAR ClassName[64];
+	if (GetClassNameW(Child, ClassName, _countof(ClassName)))
+	{
+		// Don't theme checkboxes — themed buttons ignore WM_CTLCOLORBTN
+		// SetTextColor, causing black text on dark backgrounds on some
+		// Windows builds. Let WM_CTLCOLORBTN handle their text color
+		// instead (classic-mode checkboxes respect the DC text color).
+		if (StrCmpW(ClassName, L"Button") == 0)
+		{
+			LONG Style = GetWindowLongW(Child, GWL_STYLE);
+			DWORD BtnType = Style & 0x0F; // BS_TYPEMASK
+			if (BtnType == BS_AUTOCHECKBOX || BtnType == BS_CHECKBOX)
+			{
+				return TRUE;
+			}
+		}
+	}
+
 	SetWindowTheme(Child, L"DarkMode_Explorer", NULL);
 	return TRUE;
 }
