@@ -27,6 +27,21 @@ static struct
 }
 gConfigShortcut;
 
+// Subclassed listbox (combo dropdown) original proc for dark mode
+static WNDPROC gConfigListBoxOrigProc;
+
+static LRESULT CALLBACK Config__ListBoxProc(HWND Window, UINT Message, WPARAM WParam, LPARAM LParam)
+{
+	if (Message == WM_ERASEBKGND)
+	{
+		RECT Rect;
+		GetClientRect(Window, &Rect);
+		FillRect((HDC)WParam, &Rect, gConfigDarkEditBrush);
+		return 1;
+	}
+	return CallWindowProcW(gConfigListBoxOrigProc, Window, Message, WParam, LParam);
+}
+
 // Function pointers filled from ConfigCapabilities (passed to Config_ShowDialog)
 static bool gCanHideMouseCursor;
 static bool gCanHideRecordingBorder;
@@ -52,6 +67,26 @@ static BOOL Config__IsDarkMode(void)
 static BOOL CALLBACK Config__ApplyDarkToChild(HWND Child, LPARAM lParam)
 {
 	(void)lParam;
+
+	WCHAR ClassName[64];
+	if (GetClassNameW(Child, ClassName, _countof(ClassName)))
+	{
+		// Don't theme checkboxes and group boxes — let WM_CTLCOLORBTN handle
+		// their text colors; the theme can override those and cause black text
+		// on dark backgrounds. Push buttons, on the other hand, need the theme
+		// for their face drawing and don't have this conflict.
+		if (StrCmpW(ClassName, L"Button") == 0)
+		{
+			LONG Style = GetWindowLongW(Child, GWL_STYLE);
+			DWORD BtnType = Style & 0x0F; // BS_TYPEMASK
+			if (BtnType == BS_AUTOCHECKBOX || BtnType == BS_CHECKBOX ||
+			    BtnType == BS_GROUPBOX)
+			{
+				return TRUE;
+			}
+		}
+	}
+
 	SetWindowTheme(Child, L"DarkMode_Explorer", NULL);
 	return TRUE;
 }
@@ -475,6 +510,7 @@ static LRESULT CALLBACK Config__DialogProc(HWND Window, UINT Message, WPARAM WPa
 			gConfigDarkEditBrush = NULL;
 		}
 		gDialogWindow = NULL;
+			gConfigListBoxOrigProc = NULL;
 	}
 	else if (Message == WM_CTLCOLORDLG)
 	{
@@ -558,6 +594,15 @@ static LRESULT CALLBACK Config__DialogProc(HWND Window, UINT Message, WPARAM WPa
 			if (GetComboBoxInfo((HWND)LParam, &cbi) && cbi.hwndList)
 			{
 				SetWindowTheme(cbi.hwndList, L"DarkMode_Explorer", NULL);
+
+				// subclass the dropdown listbox so it uses dark background.
+				// SetWindowTheme alone does not always recolor list items on all
+				// Windows builds; handling WM_ERASEBKGND guarantees a dark fill.
+				if (!gConfigListBoxOrigProc)
+				{
+					gConfigListBoxOrigProc = (WNDPROC)GetWindowLongPtrW(cbi.hwndList, GWLP_WNDPROC);
+				}
+				SetWindowLongPtrW(cbi.hwndList, GWLP_WNDPROC, (LONG_PTR)Config__ListBoxProc);
 			}
 		}
 
