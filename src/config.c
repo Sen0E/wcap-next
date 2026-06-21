@@ -42,6 +42,29 @@ static LRESULT CALLBACK Config__ListBoxProc(HWND Window, UINT Message, WPARAM WP
 	return CallWindowProcW(gConfigListBoxOrigProc, Window, Message, WParam, LParam);
 }
 
+// Subclassed combo box original proc for dark mode
+static WNDPROC gConfigComboOrigProc;
+
+static LRESULT CALLBACK Config__ComboProc(HWND Window, UINT Message, WPARAM WParam, LPARAM LParam)
+{
+	if (Message == WM_ERASEBKGND)
+	{
+		RECT Rect;
+		GetClientRect(Window, &Rect);
+		FillRect((HDC)WParam, &Rect, gConfigDarkBrush);
+		return 1;
+	}
+	if (Message == WM_CTLCOLORSTATIC)
+	{
+		// Color the combo's internal static (selected item text display)
+		HDC hdc = (HDC)WParam;
+		SetTextColor(hdc, RGB(220, 220, 220));
+		SetBkColor(hdc, RGB(32, 32, 32));
+		return (LRESULT)gConfigDarkBrush;
+	}
+	return CallWindowProcW(gConfigComboOrigProc, Window, Message, WParam, LParam);
+}
+
 // Function pointers filled from ConfigCapabilities (passed to Config_ShowDialog)
 static bool gCanHideMouseCursor;
 static bool gCanHideRecordingBorder;
@@ -71,18 +94,32 @@ static BOOL CALLBACK Config__ApplyDarkToChild(HWND Child, LPARAM lParam)
 	WCHAR ClassName[64];
 	if (GetClassNameW(Child, ClassName, _countof(ClassName)))
 	{
-		// Don't theme checkboxes — themed buttons ignore WM_CTLCOLORBTN
-		// SetTextColor, causing black text on dark backgrounds on some
-		// Windows builds. Let WM_CTLCOLORBTN handle their text color
-		// instead (classic-mode checkboxes respect the DC text color).
 		if (StrCmpW(ClassName, L"Button") == 0)
 		{
+			// Don't theme checkboxes — themed buttons ignore
+			// WM_CTLCOLORBTN SetTextColor, causing black text on
+			// some Windows builds. Classic-mode checkboxes respect
+			// the DC text color.
 			LONG Style = GetWindowLongW(Child, GWL_STYLE);
 			DWORD BtnType = Style & 0x0F; // BS_TYPEMASK
 			if (BtnType == BS_AUTOCHECKBOX || BtnType == BS_CHECKBOX)
 			{
 				return TRUE;
 			}
+		}
+		else if (StrCmpW(ClassName, L"ComboBox") == 0)
+		{
+			// Don't theme the combo body — on some Windows builds
+			// the theme leaves the display area light-colored.
+			// Subclass it so WM_CTLCOLORSTATIC from its internal
+			// static gets dark colors. The dropdown list is themed
+			// separately via CBN_DROPDOWN.
+			if (!gConfigComboOrigProc)
+			{
+				gConfigComboOrigProc = (WNDPROC)GetWindowLongPtrW(Child, GWLP_WNDPROC);
+			}
+			SetWindowLongPtrW(Child, GWLP_WNDPROC, (LONG_PTR)Config__ComboProc);
+			return TRUE;
 		}
 	}
 
@@ -510,6 +547,7 @@ static LRESULT CALLBACK Config__DialogProc(HWND Window, UINT Message, WPARAM WPa
 		}
 		gDialogWindow = NULL;
 			gConfigListBoxOrigProc = NULL;
+			gConfigComboOrigProc = NULL;
 	}
 	else if (Message == WM_CTLCOLORDLG)
 	{
@@ -544,7 +582,7 @@ static LRESULT CALLBACK Config__DialogProc(HWND Window, UINT Message, WPARAM WPa
 		{
 			HDC hdc = (HDC)WParam;
 			SetTextColor(hdc, RGB(220, 220, 220));
-			SetBkMode(hdc, TRANSPARENT);
+			SetBkColor(hdc, RGB(32, 32, 32));
 			return (LRESULT)gConfigDarkBrush;
 		}
 	}
