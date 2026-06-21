@@ -67,26 +67,6 @@ static BOOL Config__IsDarkMode(void)
 static BOOL CALLBACK Config__ApplyDarkToChild(HWND Child, LPARAM lParam)
 {
 	(void)lParam;
-
-	WCHAR ClassName[64];
-	if (GetClassNameW(Child, ClassName, _countof(ClassName)))
-	{
-		// Don't theme checkboxes and group boxes — let WM_CTLCOLORBTN handle
-		// their text colors; the theme can override those and cause black text
-		// on dark backgrounds. Push buttons, on the other hand, need the theme
-		// for their face drawing and don't have this conflict.
-		if (StrCmpW(ClassName, L"Button") == 0)
-		{
-			LONG Style = GetWindowLongW(Child, GWL_STYLE);
-			DWORD BtnType = Style & 0x0F; // BS_TYPEMASK
-			if (BtnType == BS_AUTOCHECKBOX || BtnType == BS_CHECKBOX ||
-			    BtnType == BS_GROUPBOX)
-			{
-				return TRUE;
-			}
-		}
-	}
-
 	SetWindowTheme(Child, L"DarkMode_Explorer", NULL);
 	return TRUE;
 }
@@ -545,7 +525,7 @@ static LRESULT CALLBACK Config__DialogProc(HWND Window, UINT Message, WPARAM WPa
 		{
 			HDC hdc = (HDC)WParam;
 			SetTextColor(hdc, RGB(220, 220, 220));
-			SetBkColor(hdc, RGB(32, 32, 32));
+			SetBkMode(hdc, TRANSPARENT);
 			return (LRESULT)gConfigDarkBrush;
 		}
 	}
