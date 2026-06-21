@@ -15,6 +15,7 @@
 
 static BOOL gConfigDarkMode;
 static HBRUSH gConfigDarkBrush;
+static HBRUSH gConfigEditBrush;
 static HWND gDialogWindow;
 
 // current control to set shortcut
@@ -469,12 +470,49 @@ static LRESULT CALLBACK Config__DialogProc(HWND Window, UINT Message, WPARAM WPa
 			DeleteObject(gConfigDarkBrush);
 			gConfigDarkBrush = NULL;
 		}
+		if (gConfigEditBrush)
+		{
+			DeleteObject(gConfigEditBrush);
+			gConfigEditBrush = NULL;
+		}
 		gDialogWindow = NULL;
 	}
 	else if (Message == WM_CTLCOLORDLG)
 	{
 		if (gConfigDarkMode)
 		{
+			return (LRESULT)gConfigDarkBrush;
+		}
+	}
+	else if (Message == WM_CTLCOLORSTATIC)
+	{
+		if (gConfigDarkMode)
+		{
+			HDC hdc = (HDC)WParam;
+			SetTextColor(hdc, RGB(255, 255, 255));
+			SetBkMode(hdc, TRANSPARENT);
+			return (LRESULT)gConfigDarkBrush;
+		}
+	}
+	else if (Message == WM_CTLCOLOREDIT || Message == WM_CTLCOLORLISTBOX)
+	{
+		if (gConfigDarkMode)
+		{
+			HDC hdc = (HDC)WParam;
+			SetTextColor(hdc, RGB(255, 255, 255));
+			SetBkColor(hdc, RGB(40, 40, 40));
+			if (!gConfigEditBrush)
+				gConfigEditBrush = CreateSolidBrush(RGB(40, 40, 40));
+			return (LRESULT)gConfigEditBrush;
+		}
+	}
+	else if (Message == WM_CTLCOLORBTN)
+	{
+		if (gConfigDarkMode)
+		{
+			HDC hdc = (HDC)WParam;
+			SetTextColor(hdc, RGB(255, 255, 255));
+			SetBkMode(hdc, TRANSPARENT);
 			return (LRESULT)gConfigDarkBrush;
 		}
 	}
@@ -496,6 +534,8 @@ static LRESULT CALLBACK Config__DialogProc(HWND Window, UINT Message, WPARAM WPa
 				{
 					if (gConfigDarkBrush)
 						{ DeleteObject(gConfigDarkBrush); gConfigDarkBrush = NULL; }
+					if (gConfigEditBrush)
+						{ DeleteObject(gConfigEditBrush); gConfigEditBrush = NULL; }
 				}
 			}
 			InvalidateRect(Window, NULL, TRUE);
