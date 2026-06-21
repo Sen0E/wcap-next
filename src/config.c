@@ -4,18 +4,9 @@
 #include <shlwapi.h>
 #include <knownfolders.h>
 #include <windowsx.h>
-#include <dwmapi.h>
-#include <uxtheme.h>
-
-#ifndef DWMWA_USE_IMMERSIVE_DARK_MODE
-#define DWMWA_USE_IMMERSIVE_DARK_MODE 20
-#endif
 
 #define INI_SECTION L"wcap"
 
-static BOOL gConfigDarkMode;
-static HBRUSH gConfigDarkBrush;
-static HBRUSH gConfigEditBrush;
 static HWND gDialogWindow;
 
 // current control to set shortcut
@@ -35,43 +26,6 @@ static bool gCanIncludeSecondaryWindows;
 static bool gCanCaptureApplicationLocal;
 static void (*gDisableHotKeys)(void);
 static BOOL (*gEnableHotKeys)(void);
-
-static BOOL Config__IsDarkMode(void)
-{
-	HKEY hKey;
-	DWORD appsUseLightTheme = 1;
-	if (RegOpenKeyExW(HKEY_CURRENT_USER, L"Software\\Microsoft\\Windows\\CurrentVersion\\Themes\\Personalize", 0, KEY_READ, &hKey) == ERROR_SUCCESS)
-	{
-		DWORD dataSize = sizeof(DWORD);
-		RegQueryValueExW(hKey, L"AppsUseLightTheme", NULL, NULL, (LPBYTE)&appsUseLightTheme, &dataSize);
-		RegCloseKey(hKey);
-	}
-	return appsUseLightTheme == 0;
-}
-
-static BOOL CALLBACK Config__ApplyDarkToChild(HWND Child, LPARAM lParam)
-{
-	(void)lParam;
-	// Use L"Explorer" (not L"DarkMode_Explorer") — the standard Explorer
-	// theme automatically respects the system dark/light mode setting and
-	// correctly colors text, backgrounds, and borders for all controls.
-	SetWindowTheme(Child, L"Explorer", NULL);
-	return TRUE;
-}
-
-static void Config__ApplyDarkMode(HWND Window)
-{
-	gConfigDarkMode = Config__IsDarkMode();
-
-	BOOL value = gConfigDarkMode ? TRUE : FALSE;
-	DwmSetWindowAttribute(Window, DWMWA_USE_IMMERSIVE_DARK_MODE, &value, sizeof(value));
-
-	// L"Explorer" must be applied unconditionally — the theme auto-adapts
-	// to the system dark/light setting.  If we only apply it when dark,
-	// controls won't update when the user switches back to light mode.
-	SetWindowTheme(Window, L"Explorer", NULL);
-	EnumChildWindows(Window, Config__ApplyDarkToChild, 0);
-}
 
 // control id's
 #define ID_OK                      IDOK     // 1
@@ -434,12 +388,6 @@ static LRESULT CALLBACK Config__DialogProc(HWND Window, UINT Message, WPARAM WPa
 		Config* C = (Config*)LParam;
 		SetWindowLongPtrW(Window, GWLP_USERDATA, (LONG_PTR)C);
 
-		Config__ApplyDarkMode(Window);
-		if (gConfigDarkMode)
-		{
-			gConfigDarkBrush = CreateSolidBrush(RGB(32, 32, 32));
-		}
-
 		SendDlgItemMessageW(Window, ID_VIDEO_CODEC, CB_ADDSTRING, 0, (LPARAM)L"H264 / AVC");
 		SendDlgItemMessageW(Window, ID_VIDEO_CODEC, CB_ADDSTRING, 0, (LPARAM)L"H265 / HEVC");
 		SendDlgItemMessageW(Window, ID_VIDEO_CODEC, CB_ADDSTRING, 0, (LPARAM)L"AV1");
@@ -465,96 +413,12 @@ static LRESULT CALLBACK Config__DialogProc(HWND Window, UINT Message, WPARAM WPa
 	}
 	else if (Message == WM_DESTROY)
 	{
-		if (gConfigDarkBrush)
-		{
-			DeleteObject(gConfigDarkBrush);
-			gConfigDarkBrush = NULL;
-		}
-		if (gConfigEditBrush)
-		{
-			DeleteObject(gConfigEditBrush);
-			gConfigEditBrush = NULL;
-		}
 		gDialogWindow = NULL;
-	}
-	else if (Message == WM_CTLCOLORDLG)
-	{
-		if (gConfigDarkMode)
-		{
-			return (LRESULT)gConfigDarkBrush;
-		}
-	}
-	else if (Message == WM_CTLCOLORSTATIC)
-	{
-		if (gConfigDarkMode)
-		{
-			HDC hdc = (HDC)WParam;
-			SetTextColor(hdc, RGB(255, 255, 255));
-			SetBkMode(hdc, TRANSPARENT);
-			return (LRESULT)gConfigDarkBrush;
-		}
-	}
-	else if (Message == WM_CTLCOLOREDIT || Message == WM_CTLCOLORLISTBOX)
-	{
-		if (gConfigDarkMode)
-		{
-			HDC hdc = (HDC)WParam;
-			SetTextColor(hdc, RGB(255, 255, 255));
-			SetBkColor(hdc, RGB(40, 40, 40));
-			if (!gConfigEditBrush)
-				gConfigEditBrush = CreateSolidBrush(RGB(40, 40, 40));
-			return (LRESULT)gConfigEditBrush;
-		}
-	}
-	else if (Message == WM_CTLCOLORBTN)
-	{
-		if (gConfigDarkMode)
-		{
-			HDC hdc = (HDC)WParam;
-			SetTextColor(hdc, RGB(255, 255, 255));
-			SetBkMode(hdc, TRANSPARENT);
-			return (LRESULT)gConfigDarkBrush;
-		}
-	}
-	else if (Message == WM_SETTINGCHANGE)
-	{
-		if (WParam == 0 && lstrcmpW((LPCWSTR)LParam, L"ImmersiveColorSet") == 0)
-		{
-			BOOL wasDark = gConfigDarkMode;
-			Config__ApplyDarkMode(Window);
-
-			if (gConfigDarkMode != wasDark)
-			{
-				if (gConfigDarkMode)
-				{
-					if (!gConfigDarkBrush)
-						gConfigDarkBrush = CreateSolidBrush(RGB(32, 32, 32));
-				}
-				else
-				{
-					if (gConfigDarkBrush)
-						{ DeleteObject(gConfigDarkBrush); gConfigDarkBrush = NULL; }
-					if (gConfigEditBrush)
-						{ DeleteObject(gConfigEditBrush); gConfigEditBrush = NULL; }
-				}
-			}
-			InvalidateRect(Window, NULL, TRUE);
-		}
 	}
 	else if (Message == WM_COMMAND)
 	{
 		Config* C = (Config*)GetWindowLongPtrW(Window, GWLP_USERDATA);
 		int Control = LOWORD(WParam);
-
-		// apply dark theme to combo box dropdown listboxes (popup windows, not reached by EnumChildWindows)
-		if (HIWORD(WParam) == CBN_DROPDOWN)
-		{
-			COMBOBOXINFO cbi = { sizeof(COMBOBOXINFO) };
-			if (GetComboBoxInfo((HWND)LParam, &cbi) && cbi.hwndList)
-			{
-				SetWindowTheme(cbi.hwndList, L"Explorer", NULL);
-			}
-		}
 
 		if (Control == ID_OK)
 		{
