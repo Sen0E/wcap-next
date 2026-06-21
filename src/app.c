@@ -4,6 +4,7 @@
 #include <dwmapi.h>
 #include <shlobj.h>
 #include <shlwapi.h>
+#include <shellapi.h>
 #include <windowsx.h>
 #include <uxtheme.h>
 
