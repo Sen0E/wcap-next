@@ -6,29 +6,9 @@
 #include <windowsx.h>
 #include <dwmapi.h>
 #include <uxtheme.h>
-#include <vssym32.h>
 
 #ifndef DWMWA_USE_IMMERSIVE_DARK_MODE
 #define DWMWA_USE_IMMERSIVE_DARK_MODE 20
-#endif
-
-// Fallback theme part/state constants for older SDKs
-#ifndef BP_CHECKBOX
-#define BP_CHECKBOX            3
-#endif
-#ifndef CBS_UNCHECKEDNORMAL
-#define CBS_UNCHECKEDNORMAL    1
-#define CBS_UNCHECKEDDISABLED  4
-#define CBS_CHECKEDNORMAL      5
-#define CBS_CHECKEDDISABLED    8
-#endif
-#ifndef BP_GROUPBOX
-#define BP_GROUPBOX            4
-#define GBS_NORMAL             1
-#endif
-#ifndef CP_DROPDOWNBUTTON
-#define CP_DROPDOWNBUTTON      1
-#define CBXS_NORMAL            1
 #endif
 
 #define INI_SECTION L"wcap"
@@ -46,217 +26,6 @@ static struct
 	int Control;
 }
 gConfigShortcut;
-
-// Subclassed listbox (combo dropdown) original proc for dark mode
-static WNDPROC gConfigListBoxOrigProc;
-
-static LRESULT CALLBACK Config__ListBoxProc(HWND Window, UINT Message, WPARAM WParam, LPARAM LParam)
-{
-	if (Message == WM_ERASEBKGND)
-	{
-		RECT Rect;
-		GetClientRect(Window, &Rect);
-		FillRect((HDC)WParam, &Rect, gConfigDarkEditBrush);
-		return 1;
-	}
-	return CallWindowProcW(gConfigListBoxOrigProc, Window, Message, WParam, LParam);
-}
-
-// Subclassed combo box original proc for dark mode
-static WNDPROC gConfigComboOrigProc;
-
-static LRESULT CALLBACK Config__ComboProc(HWND Window, UINT Message, WPARAM WParam, LPARAM LParam)
-{
-	if ((Message == WM_PAINT || Message == WM_PRINTCLIENT) && gConfigDarkMode)
-	{
-		PAINTSTRUCT ps;
-		HDC hdc = Message == WM_PAINT ? BeginPaint(Window, &ps) : (HDC)WParam;
-
-		RECT Rect;
-		GetClientRect(Window, &Rect);
-
-		// Dark background
-		FillRect(hdc, &Rect, gConfigDarkBrush);
-
-		// Draw themed dropdown button on the right
-		HTHEME Theme = OpenThemeData(Window, L"ComboBox");
-		if (Theme)
-		{
-			int BtnW = GetSystemMetrics(SM_CXVSCROLL);
-			RECT BtnRect = { Rect.right - BtnW, Rect.top, Rect.right, Rect.bottom };
-			DrawThemeBackground(Theme, hdc, CP_DROPDOWNBUTTON, CBXS_NORMAL, &BtnRect, NULL);
-			CloseThemeData(Theme);
-		}
-		else
-		{
-			// Fallback: simple down-arrow button
-			int BtnW = GetSystemMetrics(SM_CXVSCROLL);
-			RECT BtnRect = { Rect.right - BtnW, Rect.top, Rect.right, Rect.bottom };
-			DrawFrameControl(hdc, &BtnRect, DFC_SCROLL, DFCS_SCROLLCOMBOBOX);
-		}
-
-		// Draw selected-item text (left of the dropdown button)
-		int Index = (int)SendMessageW(Window, CB_GETCURSEL, 0, 0);
-		if (Index >= 0)
-		{
-			WCHAR Text[256];
-			if (SendMessageW(Window, CB_GETLBTEXT, (WPARAM)Index, (LPARAM)Text) != CB_ERR)
-			{
-				int BtnW = GetSystemMetrics(SM_CXVSCROLL);
-				RECT TextRect = { Rect.left + 4, Rect.top + 2, Rect.right - BtnW - 2, Rect.bottom - 2 };
-
-				HFONT Font = (HFONT)SendMessageW(Window, WM_GETFONT, 0, 0);
-				HFONT OldFont = Font ? SelectObject(hdc, Font) : NULL;
-
-				SetTextColor(hdc, RGB(220, 220, 220));
-				SetBkMode(hdc, TRANSPARENT);
-				DrawTextW(hdc, Text, -1, &TextRect, DT_LEFT | DT_VCENTER | DT_SINGLELINE);
-
-				if (OldFont) SelectObject(hdc, OldFont);
-			}
-		}
-
-		if (Message == WM_PAINT) EndPaint(Window, &ps);
-		return 0;
-	}
-
-	return CallWindowProcW(gConfigComboOrigProc, Window, Message, WParam, LParam);
-}
-
-// Subclassed checkbox proc — full WM_PAINT override for clean dark-mode
-// rendering without overdraw.  The original proc handles clicks / keyboard /
-// state tracking; we only replace the painting.
-static WNDPROC gConfigCheckboxOrigProc;
-
-static LRESULT CALLBACK Config__CheckboxProc(HWND Window, UINT Message, WPARAM WParam, LPARAM LParam)
-{
-	if ((Message == WM_PAINT || Message == WM_PRINTCLIENT) && gConfigDarkMode)
-	{
-		PAINTSTRUCT ps;
-		HDC hdc = Message == WM_PAINT ? BeginPaint(Window, &ps) : (HDC)WParam;
-
-		RECT Rect;
-		GetClientRect(Window, &Rect);
-
-		DWORD State = (DWORD)SendMessageW(Window, BM_GETCHECK, 0, 0);
-		BOOL Checked = (State == BST_CHECKED);
-		BOOL Disabled = !IsWindowEnabled(Window);
-		BOOL Focused = (GetFocus() == Window);
-
-		WCHAR Text[256];
-		int TextLen = GetWindowTextW(Window, Text, _countof(Text));
-
-		// Dark background
-		FillRect(hdc, &Rect, gConfigDarkBrush);
-
-		// Draw themed checkbox square
-		HTHEME Theme = OpenThemeData(Window, L"Button");
-		if (Theme)
-		{
-			int PartState;
-			if (Disabled)
-				PartState = Checked ? CBS_CHECKEDDISABLED : CBS_UNCHECKEDDISABLED;
-			else
-				PartState = Checked ? CBS_CHECKEDNORMAL : CBS_UNCHECKEDNORMAL;
-
-			SIZE Size;
-			if (SUCCEEDED(GetThemePartSize(Theme, hdc, BP_CHECKBOX, PartState, NULL, TS_DRAW, &Size)))
-			{
-				RECT BoxRect;
-				BoxRect.left   = Rect.left;
-				BoxRect.top    = Rect.top + (Rect.bottom - Rect.top - Size.cy) / 2;
-				BoxRect.right  = BoxRect.left + Size.cx;
-				BoxRect.bottom = BoxRect.top  + Size.cy;
-
-				DrawThemeBackground(Theme, hdc, BP_CHECKBOX, PartState, &BoxRect, NULL);
-
-				Rect.left = BoxRect.right + Size.cx / 2;
-			}
-			CloseThemeData(Theme);
-		}
-
-		// Draw text
-		if (TextLen > 0)
-		{
-			HFONT Font = (HFONT)SendMessageW(Window, WM_GETFONT, 0, 0);
-			HFONT OldFont = Font ? SelectObject(hdc, Font) : NULL;
-
-			SetTextColor(hdc, Disabled ? RGB(128, 128, 128) : RGB(220, 220, 220));
-			SetBkMode(hdc, TRANSPARENT);
-			DrawTextW(hdc, Text, TextLen, &Rect, DT_LEFT | DT_VCENTER | DT_SINGLELINE);
-
-			if (OldFont) SelectObject(hdc, OldFont);
-		}
-
-		// Focus rect
-		if (Focused)
-		{
-			RECT FocusRect = Rect;
-			if (TextLen > 0)
-			{
-				SIZE Sz;
-				if (GetTextExtentPoint32W(hdc, Text, TextLen, &Sz))
-					FocusRect.right = FocusRect.left + Sz.cx + 4;
-			}
-			DrawFocusRect(hdc, &FocusRect);
-		}
-
-		if (Message == WM_PAINT) EndPaint(Window, &ps);
-		return 0;
-	}
-
-	return CallWindowProcW(gConfigCheckboxOrigProc, Window, Message, WParam, LParam);
-}
-
-// Subclassed group-box proc — full WM_PAINT override, same pattern.
-static WNDPROC gConfigGroupBoxOrigProc;
-
-static LRESULT CALLBACK Config__GroupBoxProc(HWND Window, UINT Message, WPARAM WParam, LPARAM LParam)
-{
-	if ((Message == WM_PAINT || Message == WM_PRINTCLIENT) && gConfigDarkMode)
-	{
-		PAINTSTRUCT ps;
-		HDC hdc = Message == WM_PAINT ? BeginPaint(Window, &ps) : (HDC)WParam;
-
-		RECT Rect;
-		GetClientRect(Window, &Rect);
-
-		WCHAR Text[256];
-		int TextLen = GetWindowTextW(Window, Text, _countof(Text));
-
-		// Dark background
-		FillRect(hdc, &Rect, gConfigDarkBrush);
-
-		// Draw themed group-box frame
-		HTHEME Theme = OpenThemeData(Window, L"Button");
-		if (Theme)
-		{
-			DrawThemeBackground(Theme, hdc, BP_GROUPBOX, GBS_NORMAL, &Rect, NULL);
-			CloseThemeData(Theme);
-		}
-
-		// Draw caption
-		if (TextLen > 0)
-		{
-			HFONT Font = (HFONT)SendMessageW(Window, WM_GETFONT, 0, 0);
-			HFONT OldFont = Font ? SelectObject(hdc, Font) : NULL;
-
-			SetTextColor(hdc, RGB(220, 220, 220));
-			SetBkMode(hdc, TRANSPARENT);
-
-			// caption is at the top, inside the frame opening
-			RECT R = { 10, 0, Rect.right - 4, 18 };
-			DrawTextW(hdc, Text, TextLen, &R, DT_LEFT | DT_TOP | DT_SINGLELINE);
-
-			if (OldFont) SelectObject(hdc, OldFont);
-		}
-
-		if (Message == WM_PAINT) EndPaint(Window, &ps);
-		return 0;
-	}
-
-	return CallWindowProcW(gConfigGroupBoxOrigProc, Window, Message, WParam, LParam);
-}
 
 // Function pointers filled from ConfigCapabilities (passed to Config_ShowDialog)
 static bool gCanHideMouseCursor;
@@ -283,56 +52,10 @@ static BOOL Config__IsDarkMode(void)
 static BOOL CALLBACK Config__ApplyDarkToChild(HWND Child, LPARAM lParam)
 {
 	(void)lParam;
-
-	WCHAR ClassName[64];
-	if (GetClassNameW(Child, ClassName, _countof(ClassName)))
-	{
-		if (StrCmpW(ClassName, L"Button") == 0)
-		{
-			LONG Style = GetWindowLongW(Child, GWL_STYLE);
-			DWORD BtnType = Style & 0x0F;
-			if (BtnType == BS_AUTOCHECKBOX || BtnType == BS_CHECKBOX)
-			{
-				SetWindowTheme(Child, L"DarkMode_Explorer", NULL);
-				if (!gConfigCheckboxOrigProc)
-					gConfigCheckboxOrigProc = (WNDPROC)GetWindowLongPtrW(Child, GWLP_WNDPROC);
-				SetWindowLongPtrW(Child, GWLP_WNDPROC, (LONG_PTR)Config__CheckboxProc);
-				return TRUE;
-			}
-			if (BtnType == BS_GROUPBOX)
-			{
-				SetWindowTheme(Child, L"DarkMode_Explorer", NULL);
-				if (!gConfigGroupBoxOrigProc)
-					gConfigGroupBoxOrigProc = (WNDPROC)GetWindowLongPtrW(Child, GWLP_WNDPROC);
-				SetWindowLongPtrW(Child, GWLP_WNDPROC, (LONG_PTR)Config__GroupBoxProc);
-				return TRUE;
-			}
-		}
-		else if (StrCmpW(ClassName, L"ComboBox") == 0)
-		{
-			// Theme the body + dropdown button, then subclass to
-			// overdraw the selected-item text in light color.
-			SetWindowTheme(Child, L"DarkMode_Explorer", NULL);
-			if (!gConfigComboOrigProc)
-				gConfigComboOrigProc = (WNDPROC)GetWindowLongPtrW(Child, GWLP_WNDPROC);
-			SetWindowLongPtrW(Child, GWLP_WNDPROC, (LONG_PTR)Config__ComboProc);
-			return TRUE;
-		}
-		else if (StrCmpW(ClassName, L"Edit") == 0)
-		{
-			// WS_BORDER draws a thin line that stays light in dark
-			// mode; remove it and let the theme provide the border.
-			LONG EditStyle = GetWindowLongW(Child, GWL_STYLE);
-			if (EditStyle & WS_BORDER)
-			{
-				SetWindowLongW(Child, GWL_STYLE, EditStyle & ~WS_BORDER);
-				SetWindowPos(Child, NULL, 0, 0, 0, 0,
-					SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_FRAMECHANGED);
-			}
-		}
-	}
-
-	SetWindowTheme(Child, L"DarkMode_Explorer", NULL);
+	// Use L"Explorer" (not L"DarkMode_Explorer") — the standard Explorer
+	// theme automatically respects the system dark/light mode setting and
+	// correctly colors text, backgrounds, and borders for all controls.
+	SetWindowTheme(Child, L"Explorer", NULL);
 	return TRUE;
 }
 
@@ -345,7 +68,9 @@ static void Config__ApplyDarkMode(HWND Window)
 
 	if (gConfigDarkMode)
 	{
-		SetWindowTheme(Window, L"DarkMode_Explorer", NULL);
+		// L"Explorer" auto-adapts to system dark mode and correctly
+		// colors all control text, backgrounds, and borders.
+		SetWindowTheme(Window, L"Explorer", NULL);
 		EnumChildWindows(Window, Config__ApplyDarkToChild, 0);
 	}
 }
@@ -755,10 +480,6 @@ static LRESULT CALLBACK Config__DialogProc(HWND Window, UINT Message, WPARAM WPa
 			gConfigDarkEditBrush = NULL;
 		}
 		gDialogWindow = NULL;
-			gConfigListBoxOrigProc = NULL;
-			gConfigComboOrigProc = NULL;
-			gConfigCheckboxOrigProc = NULL;
-			gConfigGroupBoxOrigProc = NULL;
 	}
 	else if (Message == WM_CTLCOLORDLG)
 	{
@@ -836,21 +557,12 @@ static LRESULT CALLBACK Config__DialogProc(HWND Window, UINT Message, WPARAM WPa
 		int Control = LOWORD(WParam);
 
 		// apply dark theme to combo box dropdown listboxes (popup windows, not reached by EnumChildWindows)
-		if (HIWORD(WParam) == CBN_DROPDOWN && gConfigDarkMode)
+		if (HIWORD(WParam) == CBN_DROPDOWN)
 		{
 			COMBOBOXINFO cbi = { sizeof(COMBOBOXINFO) };
 			if (GetComboBoxInfo((HWND)LParam, &cbi) && cbi.hwndList)
 			{
-				SetWindowTheme(cbi.hwndList, L"DarkMode_Explorer", NULL);
-
-				// subclass the dropdown listbox so it uses dark background.
-				// SetWindowTheme alone does not always recolor list items on all
-				// Windows builds; handling WM_ERASEBKGND guarantees a dark fill.
-				if (!gConfigListBoxOrigProc)
-				{
-					gConfigListBoxOrigProc = (WNDPROC)GetWindowLongPtrW(cbi.hwndList, GWLP_WNDPROC);
-				}
-				SetWindowLongPtrW(cbi.hwndList, GWLP_WNDPROC, (LONG_PTR)Config__ListBoxProc);
+				SetWindowTheme(cbi.hwndList, L"Explorer", NULL);
 			}
 		}
 
