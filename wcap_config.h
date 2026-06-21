@@ -746,7 +746,7 @@ static void Config__DoDialogLayout(const Config__DialogLayout* Layout, BYTE* Dat
 	ButtonX += BUTTON_WIDTH + PADDING;
 
 	DLGITEMTEMPLATE* DefaultsData = Config__Align(Data, sizeof(DWORD));
-	Data = Config__DoDialogItem(Data, "默认值", ID_DEFAULTS, CONTROL_BUTTON, WS_TABSTOP | BS_PUSHBUTTON, ButtonX, ButtonY, BUTTON_WIDTH, ITEM_HEIGHT);
+	Data = Config__DoDialogItem(Data, "恢复默认", ID_DEFAULTS, CONTROL_BUTTON, WS_TABSTOP | BS_PUSHBUTTON, ButtonX, ButtonY, BUTTON_WIDTH, ITEM_HEIGHT);
 	ButtonX += BUTTON_WIDTH + PADDING;
 
 	for (const Config__DialogGroup* Group = Layout->Groups; Group->Caption; Group++)
@@ -1061,15 +1061,15 @@ BOOL Config_ShowDialog(Config* C)
 		.Groups = (Config__DialogGroup[])
 		{
 			{
-				.Caption = "捕获",
+				.Caption = "录制",
 				.Rect = { 0, 0, COL00W, ROW0H },
 				.Items = (Config__DialogItem[])
 				{
 					{ "鼠标光标(&M)",                ID_MOUSE_CURSOR,              ITEM_CHECKBOX                     },
-					{ "仅客户区(&C)",                ID_ONLY_CLIENT_AREA,          ITEM_CHECKBOX                     },
+					{ "仅内容区域(&C)",              ID_ONLY_CLIENT_AREA,          ITEM_CHECKBOX                     },
 					{ "显示录制边框(&B)",            ID_SHOW_RECORDING_BORDER,     ITEM_CHECKBOX                     },
-					{ "保持圆角窗口(&R)",            ID_ROUNDED_CORNERS,           ITEM_CHECKBOX                     },
-					{ "包含辅助窗口(&Y)",            ID_INCLUDE_SECONDARY_WINDOWS, ITEM_CHECKBOX                     },
+					{ "保留窗口圆角(&R)",            ID_ROUNDED_CORNERS,           ITEM_CHECKBOX                     },
+					{ "包含附属窗口(&Y)",            ID_INCLUDE_SECONDARY_WINDOWS, ITEM_CHECKBOX                     },
 					{ "GPU 编码器(&E)",              ID_GPU_ENCODER,               ITEM_CHECKBOX | ITEM_COMBOBOX, 50 },
 					{ NULL },
 				},
@@ -1081,7 +1081,7 @@ BOOL Config_ShowDialog(Config* C)
 				{
 					{ "",                            ID_OUTPUT_FOLDER,  ITEM_FOLDER                     },
 					{ "完成后打开(&P)",              ID_OPEN_FOLDER,    ITEM_CHECKBOX                   },
-					{ "分片 MP4（仅 H264）(&4)",     ID_FRAGMENTED_MP4, ITEM_CHECKBOX                   },
+					{ "流式 MP4（仅 H264）(&4)",     ID_FRAGMENTED_MP4, ITEM_CHECKBOX                   },
 					{ "限制时长（秒）(&L)",          ID_LIMIT_LENGTH,   ITEM_CHECKBOX | ITEM_NUMBER, 80 },
 					{ "限制大小（MB）(&S)",          ID_LIMIT_SIZE,     ITEM_CHECKBOX | ITEM_NUMBER, 80 },
 					{ NULL },
@@ -1092,10 +1092,10 @@ BOOL Config_ShowDialog(Config* C)
 				.Rect = { 0, ROW0H, COL10W, ROW1H },
 				.Items = (Config__DialogItem[])
 				{
-					{ "Gamma 正确缩放(&G)",        ID_VIDEO_GAMMA_RESIZE ,    ITEM_CHECKBOX     },
-					{ "改进颜色转换(&I)",           ID_VIDEO_IMPROVED_CONVERT, ITEM_CHECKBOX     },
+					{ "Gamma 校正缩放(&G)",        ID_VIDEO_GAMMA_RESIZE ,    ITEM_CHECKBOX     },
+					{ "增强颜色转换(&I)",           ID_VIDEO_IMPROVED_CONVERT, ITEM_CHECKBOX     },
 					{ "编码器",                     ID_VIDEO_CODEC,            ITEM_COMBOBOX, 64 },
-					{ "配置",                       ID_VIDEO_PROFILE,          ITEM_COMBOBOX, 64 },
+					{ "质量配置",                   ID_VIDEO_PROFILE,          ITEM_COMBOBOX, 64 },
 					{ "最大宽度(&W)",               ID_VIDEO_MAX_WIDTH,        ITEM_NUMBER,   64 },
 					{ "最大高度(&H)",               ID_VIDEO_MAX_HEIGHT,       ITEM_NUMBER,   64 },
 					{ "最大帧率(&F)",               ID_VIDEO_MAX_FRAMERATE,    ITEM_NUMBER,   64 },
@@ -1108,8 +1108,8 @@ BOOL Config_ShowDialog(Config* C)
 				.Rect = { COL10W + PADDING, ROW0H, COL11W, ROW1H },
 				.Items = (Config__DialogItem[])
 				{
-					{ "捕获音频(&D)",               ID_AUDIO_CAPTURE,           ITEM_CHECKBOX     },
-					{ "应用本地音频(&N)",           ID_AUDIO_APPLICATION_LOCAL, ITEM_CHECKBOX     },
+					{ "录制声音(&D)",               ID_AUDIO_CAPTURE,           ITEM_CHECKBOX     },
+					{ "应用内音频(&N)",           ID_AUDIO_APPLICATION_LOCAL, ITEM_CHECKBOX     },
 					{ "编码器",                     ID_AUDIO_CODEC,             ITEM_COMBOBOX, 60 },
 					{ "声道",                       ID_AUDIO_CHANNELS,          ITEM_COMBOBOX, 60 },
 					{ "采样率",                     ID_AUDIO_SAMPLERATE,        ITEM_COMBOBOX, 60 },

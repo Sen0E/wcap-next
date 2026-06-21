@@ -247,7 +247,7 @@ static void StartRecording(ID3D11Device* Device, HWND Window)
 		HWND ApplicationWindow = gConfig.ApplicationLocalAudio && AudioCapture_CanCaptureApplicationLocal() ? Window : NULL;
 		if (!AudioCapture_Start(&gAudio, ApplicationWindow))
 		{
-			ShowNotification(L"无法捕获音频！", L"无法开始录制", NIIF_WARNING);
+			ShowNotification(L"无法录制声音！", L"无法开始录制", NIIF_WARNING);
 			ScreenCapture_Stop(&gCapture);
 			ID3D11Device_Release(Device);
 			return;
@@ -392,7 +392,7 @@ static ID3D11Device* CreateDevice(void)
 	D3D_DRIVER_TYPE Driver = Adapter ? D3D_DRIVER_TYPE_UNKNOWN : D3D_DRIVER_TYPE_HARDWARE;
 	if (FAILED(D3D11CreateDevice(Adapter, Driver, NULL, flags, (D3D_FEATURE_LEVEL[]) { D3D_FEATURE_LEVEL_11_0 }, 1, D3D11_SDK_VERSION, &Device, NULL, NULL)))
 	{
-		ShowNotification(L"无法创建 D3D11 设备！", L"错误", NIIF_ERROR);
+		ShowNotification(L"无法初始化图形设备！", L"错误", NIIF_ERROR);
 		Device = NULL;
 	}
 	if (Adapter)
@@ -437,14 +437,14 @@ static void CaptureWindow(void)
 
 	if (Affinity != WDA_NONE)
 	{
-		ShowNotification(L"窗口已被排除在捕获之外！", L"无法开始录制", NIIF_WARNING);
+		ShowNotification(L"该窗口不允许被录制！", L"无法开始录制", NIIF_WARNING);
 		return;
 	}
 
 	LONG ExStyle = GetWindowLongW(Window, GWL_EXSTYLE);
 	if (ExStyle & WS_EX_TOOLWINDOW)
 	{
-		ShowNotification(L"无法捕获工具栏窗口！", L"无法开始录制", NIIF_WARNING);
+		ShowNotification(L"无法录制工具栏窗口！", L"无法开始录制", NIIF_WARNING);
 		return;
 	}
 
@@ -509,7 +509,7 @@ static void CaptureRegionInit(void)
 	HDC DeviceContext = CreateDCW(L"DISPLAY", Info.szDevice, NULL, NULL);
 	if (DeviceContext == NULL)
 	{
-		ShowNotification(L"获取显示器 HDC 失败！", L"无法开始录制", NIIF_WARNING);
+		ShowNotification(L"获取显示器信息失败！", L"无法开始录制", NIIF_WARNING);
 		return;
 	}
 
