@@ -105,6 +105,13 @@ static BOOL Config__IsDarkMode(void)
 	return appsUseLightTheme == 0;
 }
 
+static BOOL CALLBACK Config__ApplyDarkToChild(HWND Child, LPARAM lParam)
+{
+	(void)lParam;
+	SetWindowTheme(Child, L"DarkMode_Explorer", NULL);
+	return TRUE;
+}
+
 static void Config__ApplyDarkMode(HWND Window)
 {
 	gConfigDarkMode = Config__IsDarkMode();
@@ -115,6 +122,7 @@ static void Config__ApplyDarkMode(HWND Window)
 	if (gConfigDarkMode)
 	{
 		SetWindowTheme(Window, L"DarkMode_Explorer", NULL);
+		EnumChildWindows(Window, Config__ApplyDarkToChild, 0);
 	}
 }
 
