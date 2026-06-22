@@ -21,6 +21,13 @@ BOOL Theme_IsDark(void);
 // No-op when system is in light mode.
 void Theme_ApplyTitleBar(HWND Window);
 
+// Adapt all child controls in a dialog for the current theme.
+// In dark mode, disables visual styles for checkboxes/radio buttons so
+// WM_CTLCOLORSTATIC text coloring takes effect (themed buttons ignore
+// SetTextColor). In light mode, restores default visual styles.
+// Call from WM_INITDIALOG and on WM_SETTINGCHANGE theme switches.
+void Theme_ApplyToDialogControls(HWND Dialog);
+
 // Color accessors for the current theme.
 COLORREF Theme_BgColor(void);       // window/dialog background
 COLORREF Theme_TextColor(void);     // normal text

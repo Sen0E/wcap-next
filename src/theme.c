@@ -1,6 +1,7 @@
 #include "theme.h"
 
 #include <dwmapi.h>
+#include <uxtheme.h>
 
 // DWM attribute for immersive dark mode title bar.
 // Value 20 on Windows 10 2004 (build 19041) and later (incl. Windows 11).
@@ -156,6 +157,31 @@ void Theme_ApplyTitleBar(HWND Window)
 	if (gTheme.Dark && gTheme.AllowDarkModeForWindow)
 	{
 		gTheme.AllowDarkModeForWindow(Window, TRUE);
+	}
+}
+
+void Theme_ApplyToDialogControls(HWND Dialog)
+{
+	HWND Child = GetWindow(Dialog, GW_CHILD);
+	while (Child)
+	{
+		WCHAR ClassName[16];
+		if (GetClassNameW(Child, ClassName, _countof(ClassName)) > 0 &&
+			lstrcmpW(ClassName, L"Button") == 0)
+		{
+			LONG_PTR Style = GetWindowLongPtrW(Child, GWL_STYLE);
+			LONG_PTR Type = Style & BS_TYPEMASK;
+
+			// BS_AUTOCHECKBOX and BS_AUTORADIOBUTTON send WM_CTLCOLORSTATIC,
+			// but under visual styles (ComCtl32 v6) the themed text rendering
+			// ignores SetTextColor. Disabling the theme makes the control fall
+			// back to classic rendering where SetTextColor is honored.
+			if (Type == BS_AUTOCHECKBOX || Type == BS_AUTORADIOBUTTON)
+			{
+				SetWindowTheme(Child, gTheme.Dark ? L"" : NULL, gTheme.Dark ? L"" : NULL);
+			}
+		}
+		Child = GetWindow(Child, GW_HWNDNEXT);
 	}
 }
 
