@@ -215,14 +215,47 @@ void Theme_ApplyToDialogControls(HWND Dialog)
 		WCHAR ClassName[16];
 		if (GetClassNameW(Child, ClassName, _countof(ClassName)) > 0)
 		{
-			if (lstrcmpW(ClassName, L"Button") == 0 ||
-				lstrcmpW(ClassName, L"ComboBox") == 0)
+			if (lstrcmpW(ClassName, L"Button") == 0)
 			{
+				LONG_PTR Style = GetWindowLongPtrW(Child, GWL_STYLE);
+				LONG_PTR Type = Style & BS_TYPEMASK;
+
+				// Push buttons: classic rendering still draws the panel with
+				// COLOR_BTNFACE, ignoring WM_CTLCOLORBTN. Switch to owner-draw
+				// in dark mode so we fully control the appearance via
+				// WM_DRAWITEM. Save the original style so light mode can
+				// restore it.
+				if (Type == BS_PUSHBUTTON || Type == BS_DEFPUSHBUTTON)
+				{
+					if (DisableTheme)
+					{
+						if (!GetPropW(Child, L"ThemeOrigStyle"))
+						{
+							SetPropW(Child, L"ThemeOrigStyle", (HANDLE)Style);
+						}
+						SetWindowLongPtrW(Child, GWL_STYLE,
+							(Style & ~BS_TYPEMASK) | BS_OWNERDRAW);
+					}
+					else
+					{
+						HANDLE Prop = GetPropW(Child, L"ThemeOrigStyle");
+						if (Prop)
+						{
+							SetWindowLongPtrW(Child, GWL_STYLE, (LONG_PTR)Prop);
+							RemovePropW(Child, L"ThemeOrigStyle");
+						}
+					}
+				}
+
 				// Under visual styles (ComCtl32 v6) themed controls ignore
 				// SetTextColor from WM_CTLCOLOR* messages. Disabling the theme
 				// makes them fall back to classic rendering where text/background
 				// coloring is honored. Covers: checkboxes, radio buttons, push
 				// buttons, group boxes, and comboboxes.
+				SetWindowTheme(Child, DisableTheme ? L"" : NULL, DisableTheme ? L"" : NULL);
+			}
+			else if (lstrcmpW(ClassName, L"ComboBox") == 0)
+			{
 				SetWindowTheme(Child, DisableTheme ? L"" : NULL, DisableTheme ? L"" : NULL);
 			}
 			else if (lstrcmpW(ClassName, L"ScrollBar") == 0)
@@ -352,4 +385,70 @@ INT_PTR Theme_HandleCtlColorForWindow(HWND Control, HDC Dc, UINT Msg)
 		default:
 			return Theme_HandleCtlColor(Dc, Msg);
 	}
+}
+
+BOOL Theme_DrawButton(const DRAWITEMSTRUCT* Dis)
+{
+	if (!Theme_IsDark() || !Dis || Dis->CtlType != ODT_BUTTON)
+	{
+		return FALSE;
+	}
+
+	HDC Dc = Dis->hDC;
+	RECT R = Dis->rcItem;
+
+	BOOL Disabled = (Dis->itemState & ODS_DISABLED) != 0;
+	BOOL Selected = (Dis->itemState & ODS_SELECTED) != 0;
+	BOOL Focused = (Dis->itemState & ODS_FOCUS) != 0;
+
+	// Background: slightly lighter when pressed for tactile feedback
+	COLORREF Bg = Selected ? RGB(60, 60, 60) : THEME_DARK_EDIT_BG;
+	COLORREF Text = Disabled ? THEME_DARK_DISABLED_TEXT : THEME_DARK_TEXT;
+	COLORREF Border = Focused ? RGB(0, 120, 215) : THEME_DARK_GROUPBOX;
+
+	// Fill background
+	HBRUSH Brush = CreateSolidBrush(Bg);
+	FillRect(Dc, &R, Brush);
+	DeleteObject(Brush);
+
+	// Draw 1px border
+	HPEN Pen = CreatePen(PS_SOLID, 1, Border);
+	HPEN OldPen = (HPEN)SelectObject(Dc, Pen);
+	HBRUSH OldBrush = (HBRUSH)SelectObject(Dc, GetStockObject(NULL_BRUSH));
+	Rectangle(Dc, R.left, R.top, R.right, R.bottom);
+	SelectObject(Dc, OldPen);
+	SelectObject(Dc, OldBrush);
+	DeleteObject(Pen);
+
+	// Inset for content (text + focus rect)
+	RECT Inner = R;
+	InflateRect(&Inner, -2, -2);
+
+	// Draw text
+	WCHAR TextBuf[64];
+	int Len = GetWindowTextW(Dis->hwndItem, TextBuf, _countof(TextBuf));
+	if (Len > 0)
+	{
+		SetTextColor(Dc, Text);
+		SetBkMode(Dc, TRANSPARENT);
+		HFONT OldFont = (HFONT)SendMessageW(Dis->hwndItem, WM_GETFONT, 0, 0);
+		if (OldFont)
+		{
+			OldFont = (HFONT)SelectObject(Dc, OldFont);
+		}
+		DrawTextW(Dc, TextBuf, Len, &Inner, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+		if (OldFont)
+		{
+			SelectObject(Dc, OldFont);
+		}
+	}
+
+	// Focus rectangle (dashed)
+	if (Focused && !Disabled)
+	{
+		InflateRect(&Inner, -1, -1);
+		DrawFocusRect(Dc, &Inner);
+	}
+
+	return TRUE;
 }

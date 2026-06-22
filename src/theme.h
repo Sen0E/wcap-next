@@ -48,3 +48,8 @@ INT_PTR Theme_HandleCtlColor(HDC Dc, UINT Msg);
 // Handle WM_CTLCOLORBTN with explicit control window, so disabled-state
 // detection and per-control coloring can be applied.
 INT_PTR Theme_HandleCtlColorForWindow(HWND Control, HDC Dc, UINT Msg);
+
+// Handle WM_DRAWITEM for owner-drawn buttons in dark mode.
+// Returns TRUE if handled (button was drawn), FALSE if default processing
+// should occur (light mode or non-button item).
+BOOL Theme_DrawButton(const DRAWITEMSTRUCT* Dis);

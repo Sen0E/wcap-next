@@ -574,6 +574,13 @@ static LRESULT CALLBACK Config__DialogProc(HWND Window, UINT Message, WPARAM WPa
 			return Result;
 		}
 	}
+	else if (Message == WM_DRAWITEM)
+	{
+		if (Theme_DrawButton((const DRAWITEMSTRUCT*)LParam))
+		{
+			return TRUE;
+		}
+	}
 	else if (Message == WM_SETTINGCHANGE)
 	{
 		// Refresh theme on light/dark switch or high-contrast toggle.
