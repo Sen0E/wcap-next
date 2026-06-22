@@ -218,32 +218,41 @@ void Theme_ApplyToDialogControls(HWND Dialog)
 			if (lstrcmpW(ClassName, L"Button") == 0)
 			{
 				LONG_PTR Style = GetWindowLongPtrW(Child, GWL_STYLE);
-				LONG_PTR Type = Style & BS_TYPEMASK;
+				HANDLE Prop = GetPropW(Child, L"ThemeOrigStyle");
 
 				// Push buttons: classic rendering still draws the panel with
 				// COLOR_BTNFACE, ignoring WM_CTLCOLORBTN. Switch to owner-draw
 				// in dark mode so we fully control the appearance via
 				// WM_DRAWITEM. Save the original style so light mode can
 				// restore it.
-				if (Type == BS_PUSHBUTTON || Type == BS_DEFPUSHBUTTON)
+				//
+				// NOTE: check the saved prop FIRST, not the current button
+				// type. In dark mode the type was already changed to
+				// BS_OWNERDRAW, so checking Type == BS_PUSHBUTTON would never
+				// match on the dark→light transition and the button would
+				// stay owner-drawn (invisible in light mode).
+				if (DisableTheme)
 				{
-					if (DisableTheme)
+					LONG_PTR Type = Style & BS_TYPEMASK;
+					if (Prop == NULL && (Type == BS_PUSHBUTTON || Type == BS_DEFPUSHBUTTON))
 					{
-						if (!GetPropW(Child, L"ThemeOrigStyle"))
-						{
-							SetPropW(Child, L"ThemeOrigStyle", (HANDLE)Style);
-						}
+						SetPropW(Child, L"ThemeOrigStyle", (HANDLE)Style);
 						SetWindowLongPtrW(Child, GWL_STYLE,
 							(Style & ~BS_TYPEMASK) | BS_OWNERDRAW);
+						SetWindowPos(Child, NULL, 0, 0, 0, 0,
+							SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER |
+							SWP_NOACTIVATE | SWP_FRAMECHANGED);
 					}
-					else
+				}
+				else
+				{
+					if (Prop)
 					{
-						HANDLE Prop = GetPropW(Child, L"ThemeOrigStyle");
-						if (Prop)
-						{
-							SetWindowLongPtrW(Child, GWL_STYLE, (LONG_PTR)Prop);
-							RemovePropW(Child, L"ThemeOrigStyle");
-						}
+						SetWindowLongPtrW(Child, GWL_STYLE, (LONG_PTR)Prop);
+						RemovePropW(Child, L"ThemeOrigStyle");
+						SetWindowPos(Child, NULL, 0, 0, 0, 0,
+							SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER |
+							SWP_NOACTIVATE | SWP_FRAMECHANGED);
 					}
 				}
 
