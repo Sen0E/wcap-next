@@ -1,4 +1,5 @@
 #include "config.h"
+#include "theme.h"
 
 #include <shlobj.h>
 #include <shlwapi.h>
@@ -406,6 +407,8 @@ static LRESULT CALLBACK Config__DialogProc(HWND Window, UINT Message, WPARAM WPa
 
 		Config__SetDialogValues(Window, C);
 
+		Theme_ApplyTitleBar(Window);
+
 		SetForegroundWindow(Window);
 		gDialogWindow = Window;
 		gConfigShortcut.Control = 0;
@@ -558,6 +561,24 @@ static LRESULT CALLBACK Config__DialogProc(HWND Window, UINT Message, WPARAM WPa
 				SetWindowLongPtrW(ControlWindow, GWLP_WNDPROC, (LONG_PTR)&Config__ShortcutProc);
 				if (gDisableHotKeys) gDisableHotKeys();
 			}
+		}
+	}
+	else if (Message == WM_CTLCOLORDLG || Message == WM_CTLCOLORSTATIC ||
+	         Message == WM_CTLCOLOREDIT || Message == WM_CTLCOLORLISTBOX)
+	{
+		INT_PTR Result = Theme_HandleCtlColor((HDC)WParam, Message);
+		if (Result)
+		{
+			return Result;
+		}
+	}
+	else if (Message == WM_SETTINGCHANGE)
+	{
+		if (LParam && lstrcmpW((LPCWSTR)LParam, L"ImmersiveColorSet") == 0)
+		{
+			Theme_Refresh();
+			Theme_ApplyTitleBar(Window);
+			InvalidateRect(Window, NULL, TRUE);
 		}
 	}
 	return FALSE;

@@ -881,6 +881,14 @@ static LRESULT CALLBACK App_WindowProc(HWND Window, UINT Message, WPARAM WParam,
 		}
 		return TRUE;
 	}
+	else if (Message == WM_SETTINGCHANGE)
+	{
+		// system light/dark theme changed — refresh process-wide theme state
+		if (LParam && lstrcmpW((LPCWSTR)LParam, L"ImmersiveColorSet") == 0)
+		{
+			Theme_Refresh();
+		}
+	}
 	else if (Message == WM_WCAP_COMMAND)
 	{
 		if (LOWORD(LParam) == WM_RBUTTONUP)
@@ -1096,6 +1104,8 @@ static LRESULT CALLBACK App_WindowProc(HWND Window, UINT Message, WPARAM WParam,
 
 BOOL App_Init(AppState* App)
 {
+	Theme_Init();
+
 	WNDCLASSEXW WindowClass =
 	{
 		.cbSize = sizeof(WindowClass),
