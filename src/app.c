@@ -883,8 +883,12 @@ static LRESULT CALLBACK App_WindowProc(HWND Window, UINT Message, WPARAM WParam,
 	}
 	else if (Message == WM_SETTINGCHANGE)
 	{
-		// system light/dark theme changed — refresh process-wide theme state
-		if (LParam && lstrcmpW((LPCWSTR)LParam, L"ImmersiveColorSet") == 0)
+		// Refresh theme on light/dark switch or high-contrast toggle.
+		// "ImmersiveColorSet" is broadcast for dark/light theme changes.
+		// "WindowMetrics" is broadcast for high-contrast on/off changes.
+		if (LParam &&
+			(lstrcmpW((LPCWSTR)LParam, L"ImmersiveColorSet") == 0 ||
+			 lstrcmpW((LPCWSTR)LParam, L"WindowMetrics") == 0))
 		{
 			Theme_Refresh();
 		}

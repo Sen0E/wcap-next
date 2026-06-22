@@ -32,13 +32,17 @@ typedef BOOL  (WINAPI* ThemeAllowDarkModeForWindowFn)(HWND, BOOL);
 typedef long  (WINAPI* ThemeSetPreferredAppModeFn)(ThemeAppMode);
 
 // Dark mode palette (matches Windows 11 dark theme tones)
-#define THEME_DARK_BG        RGB(32, 32, 32)    // #202020 — dialog/window background
-#define THEME_DARK_EDIT_BG   RGB(45, 45, 45)    // #2D2D2D — edit/combo background
-#define THEME_DARK_TEXT      RGB(255, 255, 255)
+#define THEME_DARK_BG            RGB(32, 32, 32)    // #202020 — dialog/window background
+#define THEME_DARK_EDIT_BG       RGB(45, 45, 45)    // #2D2D2D — edit/combo background
+#define THEME_DARK_TEXT          RGB(255, 255, 255)
+#define THEME_DARK_DISABLED_TEXT RGB(160, 160, 160) // gray for disabled controls
+#define THEME_DARK_GROUPBOX      RGB(90, 90, 90)    // subtle group box border
+#define THEME_DARK_SCROLLBAR     RGB(60, 60, 60)    // scrollbar thumb
 
 static struct
 {
 	BOOL Dark;
+	BOOL HighContrast;
 	HMODULE Uxtheme;
 	ThemeRefreshImmersiveColorPolicyStateFn RefreshImmersiveColorPolicyState;
 	ThemeAllowDarkModeForAppFn             AllowDarkModeForApp;
@@ -64,6 +68,13 @@ static BOOL Theme__ReadSystemDark(void)
 	return Light == 0;
 }
 
+static BOOL Theme__ReadHighContrast(void)
+{
+	HIGHCONTRASTW Info = { .cbSize = sizeof(Info) };
+	SystemParametersInfoW(SPI_GETHIGHCONTRAST, sizeof(Info), &Info, 0);
+	return (Info.dwFlags & HCF_HIGHCONTRASTON) != 0;
+}
+
 static void Theme__LoadUxtheme(void)
 {
 	if (gTheme.Uxtheme) return;
@@ -82,6 +93,21 @@ static void Theme__LoadUxtheme(void)
 
 static void Theme__ApplyAppMode(void)
 {
+	// In high-contrast mode, let the system fully control colors — do not
+	// force dark/light app mode, otherwise it conflicts with HC themes.
+	if (gTheme.HighContrast)
+	{
+		if (gTheme.SetPreferredAppMode)
+		{
+			gTheme.SetPreferredAppMode(THEME_APPMODE_DEFAULT);
+		}
+		if (gTheme.RefreshImmersiveColorPolicyState)
+		{
+			gTheme.RefreshImmersiveColorPolicyState();
+		}
+		return;
+	}
+
 	if (gTheme.SetPreferredAppMode)
 	{
 		gTheme.SetPreferredAppMode(gTheme.Dark ? THEME_APPMODE_FORCE_DARK : THEME_APPMODE_FORCE_LIGHT);
@@ -120,6 +146,7 @@ static void Theme__UpdateBrushes(void)
 void Theme_Init(void)
 {
 	Theme__LoadUxtheme();
+	gTheme.HighContrast = Theme__ReadHighContrast();
 	gTheme.Dark = Theme__ReadSystemDark();
 	Theme__ApplyAppMode();
 	Theme__UpdateBrushes();
@@ -127,9 +154,12 @@ void Theme_Init(void)
 
 void Theme_Refresh(void)
 {
+	BOOL NewHighContrast = Theme__ReadHighContrast();
 	BOOL NewDark = Theme__ReadSystemDark();
-	if (NewDark != gTheme.Dark)
+
+	if (NewHighContrast != gTheme.HighContrast || NewDark != gTheme.Dark)
 	{
+		gTheme.HighContrast = NewHighContrast;
 		gTheme.Dark = NewDark;
 		Theme__ApplyAppMode();
 		Theme__UpdateBrushes();
@@ -143,11 +173,22 @@ void Theme_Refresh(void)
 
 BOOL Theme_IsDark(void)
 {
-	return gTheme.Dark;
+	return gTheme.Dark && !gTheme.HighContrast;
+}
+
+BOOL Theme_IsHighContrast(void)
+{
+	return gTheme.HighContrast;
 }
 
 void Theme_ApplyTitleBar(HWND Window)
 {
+	// In high-contrast mode, let the system render the title bar.
+	if (gTheme.HighContrast)
+	{
+		return;
+	}
+
 	BOOL Value = gTheme.Dark;
 
 	// attribute 20 (Win10 2004+ / Win11), fall back to 19 (Win10 1809..1909)
@@ -164,19 +205,32 @@ void Theme_ApplyTitleBar(HWND Window)
 
 void Theme_ApplyToDialogControls(HWND Dialog)
 {
+	// In high-contrast mode, keep visual styles enabled so controls match
+	// the user's HC theme. Only disable themes when actively in dark mode.
+	BOOL DisableTheme = gTheme.Dark && !gTheme.HighContrast;
+
 	HWND Child = GetWindow(Dialog, GW_CHILD);
 	while (Child)
 	{
 		WCHAR ClassName[16];
-		if (GetClassNameW(Child, ClassName, _countof(ClassName)) > 0 &&
-			(lstrcmpW(ClassName, L"Button") == 0 || lstrcmpW(ClassName, L"ComboBox") == 0))
+		if (GetClassNameW(Child, ClassName, _countof(ClassName)) > 0)
 		{
-			// Under visual styles (ComCtl32 v6) themed controls ignore
-			// SetTextColor from WM_CTLCOLOR* messages. Disabling the theme
-			// makes them fall back to classic rendering where text/background
-			// coloring is honored. Covers: checkboxes, radio buttons, push
-			// buttons, group boxes, and comboboxes.
-			SetWindowTheme(Child, gTheme.Dark ? L"" : NULL, gTheme.Dark ? L"" : NULL);
+			if (lstrcmpW(ClassName, L"Button") == 0 ||
+				lstrcmpW(ClassName, L"ComboBox") == 0)
+			{
+				// Under visual styles (ComCtl32 v6) themed controls ignore
+				// SetTextColor from WM_CTLCOLOR* messages. Disabling the theme
+				// makes them fall back to classic rendering where text/background
+				// coloring is honored. Covers: checkboxes, radio buttons, push
+				// buttons, group boxes, and comboboxes.
+				SetWindowTheme(Child, DisableTheme ? L"" : NULL, DisableTheme ? L"" : NULL);
+			}
+			else if (lstrcmpW(ClassName, L"ScrollBar") == 0)
+			{
+				// Scrollbars inside comboboxes/listboxes: disable theme so
+				// WM_CTLCOLORSCROLLBAR coloring can be applied in dark mode.
+				SetWindowTheme(Child, DisableTheme ? L"" : NULL, DisableTheme ? L"" : NULL);
+			}
 		}
 		Child = GetWindow(Child, GW_HWNDNEXT);
 	}
@@ -184,22 +238,32 @@ void Theme_ApplyToDialogControls(HWND Dialog)
 
 COLORREF Theme_BgColor(void)
 {
-	return gTheme.Dark ? THEME_DARK_BG : GetSysColor(COLOR_BTNFACE);
+	return Theme_IsDark() ? THEME_DARK_BG : GetSysColor(COLOR_BTNFACE);
 }
 
 COLORREF Theme_TextColor(void)
 {
-	return gTheme.Dark ? THEME_DARK_TEXT : GetSysColor(COLOR_BTNTEXT);
+	return Theme_IsDark() ? THEME_DARK_TEXT : GetSysColor(COLOR_BTNTEXT);
+}
+
+COLORREF Theme_DisabledTextColor(void)
+{
+	return Theme_IsDark() ? THEME_DARK_DISABLED_TEXT : GetSysColor(COLOR_GRAYTEXT);
+}
+
+COLORREF Theme_GroupBoxColor(void)
+{
+	return Theme_IsDark() ? THEME_DARK_GROUPBOX : GetSysColor(COLOR_3DSHADOW);
 }
 
 COLORREF Theme_EditBgColor(void)
 {
-	return gTheme.Dark ? THEME_DARK_EDIT_BG : GetSysColor(COLOR_WINDOW);
+	return Theme_IsDark() ? THEME_DARK_EDIT_BG : GetSysColor(COLOR_WINDOW);
 }
 
 INT_PTR Theme_HandleCtlColor(HDC Dc, UINT Msg)
 {
-	if (!gTheme.Dark)
+	if (!Theme_IsDark())
 	{
 		return 0;
 	}
@@ -208,27 +272,84 @@ INT_PTR Theme_HandleCtlColor(HDC Dc, UINT Msg)
 	{
 		case WM_CTLCOLORDLG:
 		case WM_CTLCOLORSTATIC:
-			// dialog background, group boxes, static labels, checkbox text,
-			// and combobox (CBS_DROPDOWNLIST) display area
-			SetTextColor(Dc, THEME_DARK_TEXT);
-			SetBkColor(Dc, THEME_DARK_BG);
+			if (Dc)
+			{
+				SetTextColor(Dc, THEME_DARK_TEXT);
+				SetBkColor(Dc, THEME_DARK_BG);
+			}
 			return (INT_PTR)gTheme.BgBrush;
 
 		case WM_CTLCOLORBTN:
-			// push buttons — text color only, background stays system-drawn
-			// for proper 3D border rendering
-			SetTextColor(Dc, THEME_DARK_TEXT);
-			SetBkColor(Dc, THEME_DARK_BG);
+			if (Dc)
+			{
+				SetTextColor(Dc, THEME_DARK_TEXT);
+				SetBkColor(Dc, THEME_DARK_BG);
+			}
 			return (INT_PTR)gTheme.BgBrush;
 
 		case WM_CTLCOLOREDIT:
 		case WM_CTLCOLORLISTBOX:
-			// edit boxes and combobox dropdown lists
-			SetTextColor(Dc, THEME_DARK_TEXT);
-			SetBkColor(Dc, THEME_DARK_EDIT_BG);
+			if (Dc)
+			{
+				SetTextColor(Dc, THEME_DARK_TEXT);
+				SetBkColor(Dc, THEME_DARK_EDIT_BG);
+			}
 			return (INT_PTR)gTheme.EditBgBrush;
+
+		case WM_CTLCOLORSCROLLBAR:
+			if (Dc)
+			{
+				SetBkColor(Dc, THEME_DARK_BG);
+			}
+			return (INT_PTR)gTheme.BgBrush;
 
 		default:
 			return 0;
+	}
+}
+
+INT_PTR Theme_HandleCtlColorForWindow(HWND Control, HDC Dc, UINT Msg)
+{
+	if (!Theme_IsDark() || !Control)
+	{
+		return Theme_HandleCtlColor(Dc, Msg);
+	}
+
+	BOOL Enabled = IsWindowEnabled(Control);
+
+	switch (Msg)
+	{
+		case WM_CTLCOLORSTATIC:
+			// Disabled static text (e.g. disabled checkbox labels) needs a
+			// softer color, otherwise white-on-dark is too harsh.
+			if (Dc)
+			{
+				SetTextColor(Dc, Enabled ? THEME_DARK_TEXT : THEME_DARK_DISABLED_TEXT);
+				SetBkColor(Dc, THEME_DARK_BG);
+			}
+			return (INT_PTR)gTheme.BgBrush;
+
+		case WM_CTLCOLORBTN:
+			// Disabled push buttons: keep readable but slightly dimmed text.
+			if (Dc)
+			{
+				SetTextColor(Dc, Enabled ? THEME_DARK_TEXT : THEME_DARK_DISABLED_TEXT);
+				SetBkColor(Dc, THEME_DARK_BG);
+			}
+			return (INT_PTR)gTheme.BgBrush;
+
+		case WM_CTLCOLOREDIT:
+		case WM_CTLCOLORLISTBOX:
+			if (Dc)
+			{
+				SetTextColor(Dc, Enabled ? THEME_DARK_TEXT : THEME_DARK_DISABLED_TEXT);
+				SetBkColor(Dc, THEME_DARK_EDIT_BG);
+			}
+			return (INT_PTR)gTheme.EditBgBrush;
+
+		case WM_CTLCOLORDLG:
+		case WM_CTLCOLORSCROLLBAR:
+		default:
+			return Theme_HandleCtlColor(Dc, Msg);
 	}
 }

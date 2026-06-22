@@ -566,9 +566,9 @@ static LRESULT CALLBACK Config__DialogProc(HWND Window, UINT Message, WPARAM WPa
 	}
 	else if (Message == WM_CTLCOLORDLG || Message == WM_CTLCOLORSTATIC ||
 	         Message == WM_CTLCOLOREDIT || Message == WM_CTLCOLORLISTBOX ||
-	         Message == WM_CTLCOLORBTN)
+	         Message == WM_CTLCOLORBTN || Message == WM_CTLCOLORSCROLLBAR)
 	{
-		INT_PTR Result = Theme_HandleCtlColor((HDC)WParam, Message);
+		INT_PTR Result = Theme_HandleCtlColorForWindow((HWND)LParam, (HDC)WParam, Message);
 		if (Result)
 		{
 			return Result;
@@ -576,7 +576,10 @@ static LRESULT CALLBACK Config__DialogProc(HWND Window, UINT Message, WPARAM WPa
 	}
 	else if (Message == WM_SETTINGCHANGE)
 	{
-		if (LParam && lstrcmpW((LPCWSTR)LParam, L"ImmersiveColorSet") == 0)
+		// Refresh theme on light/dark switch or high-contrast toggle.
+		if (LParam &&
+			(lstrcmpW((LPCWSTR)LParam, L"ImmersiveColorSet") == 0 ||
+			 lstrcmpW((LPCWSTR)LParam, L"WindowMetrics") == 0))
 		{
 			Theme_Refresh();
 			Theme_ApplyTitleBar(Window);
