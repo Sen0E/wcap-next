@@ -1,5 +1,7 @@
 #include "theme.h"
 
+#include <stdlib.h>
+
 #include <dwmapi.h>
 #include <uxtheme.h>
 
