@@ -169,19 +169,14 @@ void Theme_ApplyToDialogControls(HWND Dialog)
 	{
 		WCHAR ClassName[16];
 		if (GetClassNameW(Child, ClassName, _countof(ClassName)) > 0 &&
-			lstrcmpW(ClassName, L"Button") == 0)
+			(lstrcmpW(ClassName, L"Button") == 0 || lstrcmpW(ClassName, L"ComboBox") == 0))
 		{
-			LONG_PTR Style = GetWindowLongPtrW(Child, GWL_STYLE);
-			LONG_PTR Type = Style & BS_TYPEMASK;
-
-			// BS_AUTOCHECKBOX and BS_AUTORADIOBUTTON send WM_CTLCOLORSTATIC,
-			// but under visual styles (ComCtl32 v6) the themed text rendering
-			// ignores SetTextColor. Disabling the theme makes the control fall
-			// back to classic rendering where SetTextColor is honored.
-			if (Type == BS_AUTOCHECKBOX || Type == BS_AUTORADIOBUTTON)
-			{
-				SetWindowTheme(Child, gTheme.Dark ? L"" : NULL, gTheme.Dark ? L"" : NULL);
-			}
+			// Under visual styles (ComCtl32 v6) themed controls ignore
+			// SetTextColor from WM_CTLCOLOR* messages. Disabling the theme
+			// makes them fall back to classic rendering where text/background
+			// coloring is honored. Covers: checkboxes, radio buttons, push
+			// buttons, group boxes, and comboboxes.
+			SetWindowTheme(Child, gTheme.Dark ? L"" : NULL, gTheme.Dark ? L"" : NULL);
 		}
 		Child = GetWindow(Child, GW_HWNDNEXT);
 	}
@@ -213,7 +208,15 @@ INT_PTR Theme_HandleCtlColor(HDC Dc, UINT Msg)
 	{
 		case WM_CTLCOLORDLG:
 		case WM_CTLCOLORSTATIC:
-			// dialog background, group boxes, static labels, checkbox text
+			// dialog background, group boxes, static labels, checkbox text,
+			// and combobox (CBS_DROPDOWNLIST) display area
+			SetTextColor(Dc, THEME_DARK_TEXT);
+			SetBkColor(Dc, THEME_DARK_BG);
+			return (INT_PTR)gTheme.BgBrush;
+
+		case WM_CTLCOLORBTN:
+			// push buttons — text color only, background stays system-drawn
+			// for proper 3D border rendering
 			SetTextColor(Dc, THEME_DARK_TEXT);
 			SetBkColor(Dc, THEME_DARK_BG);
 			return (INT_PTR)gTheme.BgBrush;

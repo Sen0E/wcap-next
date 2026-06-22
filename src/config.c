@@ -565,7 +565,8 @@ static LRESULT CALLBACK Config__DialogProc(HWND Window, UINT Message, WPARAM WPa
 		}
 	}
 	else if (Message == WM_CTLCOLORDLG || Message == WM_CTLCOLORSTATIC ||
-	         Message == WM_CTLCOLOREDIT || Message == WM_CTLCOLORLISTBOX)
+	         Message == WM_CTLCOLOREDIT || Message == WM_CTLCOLORLISTBOX ||
+	         Message == WM_CTLCOLORBTN)
 	{
 		INT_PTR Result = Theme_HandleCtlColor((HDC)WParam, Message);
 		if (Result)
