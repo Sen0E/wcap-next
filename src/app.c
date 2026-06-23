@@ -6,7 +6,6 @@
 #include <shlwapi.h>
 #include <shellapi.h>
 #include <windowsx.h>
-#include <uxtheme.h>
 
 #if defined(_M_AMD64)
 // this is needed to be able to use Nvidia Media Foundation encoders on Optimus systems
@@ -881,18 +880,6 @@ static LRESULT CALLBACK App_WindowProc(HWND Window, UINT Message, WPARAM WParam,
 		}
 		return TRUE;
 	}
-	else if (Message == WM_SETTINGCHANGE)
-	{
-		// Refresh theme on light/dark switch or high-contrast toggle.
-		// "ImmersiveColorSet" is broadcast for dark/light theme changes.
-		// "WindowMetrics" is broadcast for high-contrast on/off changes.
-		if (LParam &&
-			(lstrcmpW((LPCWSTR)LParam, L"ImmersiveColorSet") == 0 ||
-			 lstrcmpW((LPCWSTR)LParam, L"WindowMetrics") == 0))
-		{
-			Theme_Refresh();
-		}
-	}
 	else if (Message == WM_WCAP_COMMAND)
 	{
 		if (LOWORD(LParam) == WM_RBUTTONUP)
@@ -1108,8 +1095,6 @@ static LRESULT CALLBACK App_WindowProc(HWND Window, UINT Message, WPARAM WParam,
 
 BOOL App_Init(AppState* App)
 {
-	Theme_Init();
-
 	WNDCLASSEXW WindowClass =
 	{
 		.cbSize = sizeof(WindowClass),

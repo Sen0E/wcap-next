@@ -1,5 +1,4 @@
 #include "ui.h"
-#include "theme.h"
 
 #include <shlobj.h>
 #include <shlwapi.h>
@@ -235,9 +234,9 @@ BOOL UI_PaintRegion(HWND Window, HDC Context,
 			int MsgX = (RectWidth - TotalWidth) / 2;
 			int MsgY = (RectHeight - TotalHeight) / 2;
 
-			COLORREF BoxBg     = Theme_IsDark() ? RGB(45, 45, 45)   : RGB(0, 0, 128);
-			COLORREF BoxBorder = Theme_IsDark() ? RGB(200, 200, 200) : RGB(255, 255, 255);
-			COLORREF BoxText   = Theme_IsDark() ? RGB(255, 255, 255) : RGB(255, 255, 0);
+			COLORREF BoxBg     = RGB(0, 0, 128);
+			COLORREF BoxBorder = RGB(255, 255, 255);
+			COLORREF BoxText   = RGB(255, 255, 0);
 
 			SetDCPenColor(Context, BoxBorder);
 			SetDCBrushColor(Context, BoxBg);

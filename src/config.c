@@ -1,5 +1,4 @@
 #include "config.h"
-#include "theme.h"
 
 #include <shlobj.h>
 #include <shlwapi.h>
@@ -407,10 +406,6 @@ static LRESULT CALLBACK Config__DialogProc(HWND Window, UINT Message, WPARAM WPa
 
 		Config__SetDialogValues(Window, C);
 
-		Theme_ApplyTitleBar(Window);
-		Theme_ApplyMica(Window);
-		Theme_ApplyToDialogControls(Window);
-
 		SetForegroundWindow(Window);
 		gDialogWindow = Window;
 		gConfigShortcut.Control = 0;
@@ -563,41 +558,6 @@ static LRESULT CALLBACK Config__DialogProc(HWND Window, UINT Message, WPARAM WPa
 				SetWindowLongPtrW(ControlWindow, GWLP_WNDPROC, (LONG_PTR)&Config__ShortcutProc);
 				if (gDisableHotKeys) gDisableHotKeys();
 			}
-		}
-	}
-	else if (Message == WM_CTLCOLORDLG || Message == WM_CTLCOLORSTATIC ||
-	         Message == WM_CTLCOLOREDIT || Message == WM_CTLCOLORLISTBOX ||
-	         Message == WM_CTLCOLORBTN || Message == WM_CTLCOLORSCROLLBAR)
-	{
-		INT_PTR Result = Theme_HandleCtlColorForWindow((HWND)LParam, (HDC)WParam, Message);
-		if (Result)
-		{
-			return Result;
-		}
-	}
-	else if (Message == WM_DRAWITEM)
-	{
-		if (Theme_DrawCheckBox((const DRAWITEMSTRUCT*)LParam))
-		{
-			return TRUE;
-		}
-		if (Theme_DrawButton((const DRAWITEMSTRUCT*)LParam))
-		{
-			return TRUE;
-		}
-	}
-	else if (Message == WM_SETTINGCHANGE)
-	{
-		// Refresh theme on light/dark switch or high-contrast toggle.
-		if (LParam &&
-			(lstrcmpW((LPCWSTR)LParam, L"ImmersiveColorSet") == 0 ||
-			 lstrcmpW((LPCWSTR)LParam, L"WindowMetrics") == 0))
-		{
-			Theme_Refresh();
-			Theme_ApplyTitleBar(Window);
-			Theme_ApplyMica(Window);
-			Theme_ApplyToDialogControls(Window);
-			InvalidateRect(Window, NULL, TRUE);
 		}
 	}
 	return FALSE;

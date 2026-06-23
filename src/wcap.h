@@ -61,7 +61,6 @@
 #pragma comment (lib, "ole32")
 #pragma comment (lib, "wmcodecdspuuid")
 #pragma comment (lib, "avrt")
-#pragma comment (lib, "uxtheme")
 #pragma comment (lib, "OneCore")
 #pragma comment (lib, "CoreMessaging")
 #pragma comment (lib, "advapi32")

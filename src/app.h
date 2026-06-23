@@ -6,7 +6,6 @@
 #include "capture.h"
 #include "encode.h"
 #include "ui.h"
-#include "theme.h"
 
 #include <d3d11.h>
 #include <dxgi1_6.h>
