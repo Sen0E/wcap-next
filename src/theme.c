@@ -11,11 +11,20 @@
 #define DWMWA_USE_IMMERSIVE_DARK_MODE_NEW 20
 #define DWMWA_USE_IMMERSIVE_DARK_MODE_OLD 19
 
+// DWM attribute for Windows 11 Mica / backdrop material.
+//   DWMWA_SYSTEMBACKDROP_TYPE (1029): Win11 22000+
+//     0 = None, 1 = Mica, 2 = Acrylic, 3 = MicaAlt
+//   DWMWA_MICA_EFFECT (1029 on some builds, fallback): undocumented
+// Requires DWMWA_USE_IMMERSIVE_DARK_MODE to be set first, and the window
+// must have an extended frame or be transparent for the effect to show.
+#define DWMWA_SYSTEMBACKDROP_TYPE 1029
+
 // uxtheme.dll undocumented ordinal exports for dark mode support:
 //   104: RefreshImmersiveColorPolicyState()
 //   132: AllowDarkModeForApp(BOOL)          — Windows 10 1809..1903
 //   133: AllowDarkModeForWindow(HWND, BOOL)
 //   135: SetPreferredAppMode(int)           — Windows 10 1909+
+//   136: FlushMenuThemes()                 — refresh menu rendering state
 
 typedef enum
 {
@@ -26,10 +35,20 @@ typedef enum
 }
 ThemeAppMode;
 
+typedef enum
+{
+	THEME_BACKDROP_NONE    = 0,
+	THEME_BACKDROP_MICA    = 1,
+	THEME_BACKDROP_ACRYLIC = 2,
+	THEME_BACKDROP_MICAALT = 3,
+}
+ThemeBackdrop;
+
 typedef void  (WINAPI* ThemeRefreshImmersiveColorPolicyStateFn)(void);
 typedef BOOL  (WINAPI* ThemeAllowDarkModeForAppFn)(BOOL);
 typedef BOOL  (WINAPI* ThemeAllowDarkModeForWindowFn)(HWND, BOOL);
 typedef long  (WINAPI* ThemeSetPreferredAppModeFn)(ThemeAppMode);
+typedef void  (WINAPI* ThemeFlushMenuThemesFn)(void);
 
 // Dark mode palette (matches Windows 11 dark theme tones)
 #define THEME_DARK_BG            RGB(32, 32, 32)    // #202020 — dialog/window background
@@ -48,6 +67,7 @@ static struct
 	ThemeAllowDarkModeForAppFn             AllowDarkModeForApp;
 	ThemeAllowDarkModeForWindowFn          AllowDarkModeForWindow;
 	ThemeSetPreferredAppModeFn             SetPreferredAppMode;
+	ThemeFlushMenuThemesFn                 FlushMenuThemes;
 	HBRUSH BgBrush;
 	HBRUSH EditBgBrush;
 }
@@ -89,6 +109,8 @@ static void Theme__LoadUxtheme(void)
 		(ThemeAllowDarkModeForWindowFn)GetProcAddress(gTheme.Uxtheme, MAKEINTRESOURCEA(133));
 	gTheme.SetPreferredAppMode =
 		(ThemeSetPreferredAppModeFn)GetProcAddress(gTheme.Uxtheme, MAKEINTRESOURCEA(135));
+	gTheme.FlushMenuThemes =
+		(ThemeFlushMenuThemesFn)GetProcAddress(gTheme.Uxtheme, MAKEINTRESOURCEA(136));
 }
 
 static void Theme__ApplyAppMode(void)
@@ -105,6 +127,10 @@ static void Theme__ApplyAppMode(void)
 		{
 			gTheme.RefreshImmersiveColorPolicyState();
 		}
+		if (gTheme.FlushMenuThemes)
+		{
+			gTheme.FlushMenuThemes();
+		}
 		return;
 	}
 
@@ -120,6 +146,14 @@ static void Theme__ApplyAppMode(void)
 	if (gTheme.RefreshImmersiveColorPolicyState)
 	{
 		gTheme.RefreshImmersiveColorPolicyState();
+	}
+
+	// FlushMenuThemes forces menus (popup menus, context menus) to re-render
+	// with the new app mode. Without this, tray/context menus may stay light
+	// after switching to dark mode until the process restarts.
+	if (gTheme.FlushMenuThemes)
+	{
+		gTheme.FlushMenuThemes();
 	}
 }
 
@@ -201,6 +235,24 @@ void Theme_ApplyTitleBar(HWND Window)
 	{
 		gTheme.AllowDarkModeForWindow(Window, TRUE);
 	}
+}
+
+void Theme_ApplyMica(HWND Window)
+{
+	// Mica is a Windows 11 (build 22000+) backdrop material. It has no effect
+	// on Windows 10, in light mode, or under high-contrast. We attempt the
+	// DWMWA_SYSTEMBACKDROP_TYPE attribute (1029); on older builds DwmSetWindowAttribute
+	// returns an error code which we silently ignore.
+	if (!Theme_IsDark())
+	{
+		// Restore default backdrop in light mode.
+		INT_PTR Value = THEME_BACKDROP_NONE;
+		DwmSetWindowAttribute(Window, DWMWA_SYSTEMBACKDROP_TYPE, &Value, sizeof(Value));
+		return;
+	}
+
+	INT_PTR Value = THEME_BACKDROP_MICA;
+	DwmSetWindowAttribute(Window, DWMWA_SYSTEMBACKDROP_TYPE, &Value, sizeof(Value));
 }
 
 void Theme_ApplyToDialogControls(HWND Dialog)
@@ -420,18 +472,20 @@ BOOL Theme_DrawButton(const DRAWITEMSTRUCT* Dis)
 	FillRect(Dc, &R, Brush);
 	DeleteObject(Brush);
 
-	// Draw 1px border
+	// Rounded border (matches Windows 11 control radius ~4-6px)
+	#define THEME_BTN_RADIUS 5
 	HPEN Pen = CreatePen(PS_SOLID, 1, Border);
 	HPEN OldPen = (HPEN)SelectObject(Dc, Pen);
 	HBRUSH OldBrush = (HBRUSH)SelectObject(Dc, GetStockObject(NULL_BRUSH));
-	Rectangle(Dc, R.left, R.top, R.right, R.bottom);
+	RoundRect(Dc, R.left, R.top, R.right, R.bottom,
+		THEME_BTN_RADIUS * 2, THEME_BTN_RADIUS * 2);
 	SelectObject(Dc, OldPen);
 	SelectObject(Dc, OldBrush);
 	DeleteObject(Pen);
 
 	// Inset for content (text + focus rect)
 	RECT Inner = R;
-	InflateRect(&Inner, -2, -2);
+	InflateRect(&Inner, -3, -3);
 
 	// Draw text
 	WCHAR TextBuf[64];
@@ -452,10 +506,10 @@ BOOL Theme_DrawButton(const DRAWITEMSTRUCT* Dis)
 		}
 	}
 
-	// Focus rectangle (dashed)
+	// Focus rectangle (dashed) — slightly inset to avoid the rounded border
 	if (Focused && !Disabled)
 	{
-		InflateRect(&Inner, -1, -1);
+		InflateRect(&Inner, -2, -2);
 		DrawFocusRect(Dc, &Inner);
 	}
 

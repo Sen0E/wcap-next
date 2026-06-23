@@ -408,6 +408,7 @@ static LRESULT CALLBACK Config__DialogProc(HWND Window, UINT Message, WPARAM WPa
 		Config__SetDialogValues(Window, C);
 
 		Theme_ApplyTitleBar(Window);
+		Theme_ApplyMica(Window);
 		Theme_ApplyToDialogControls(Window);
 
 		SetForegroundWindow(Window);
@@ -590,6 +591,7 @@ static LRESULT CALLBACK Config__DialogProc(HWND Window, UINT Message, WPARAM WPa
 		{
 			Theme_Refresh();
 			Theme_ApplyTitleBar(Window);
+			Theme_ApplyMica(Window);
 			Theme_ApplyToDialogControls(Window);
 			InvalidateRect(Window, NULL, TRUE);
 		}

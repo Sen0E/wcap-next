@@ -25,6 +25,11 @@ BOOL Theme_IsHighContrast(void);
 // No-op when system is in light mode.
 void Theme_ApplyTitleBar(HWND Window);
 
+// Apply Windows 11 Mica backdrop material to a window.
+// On Windows 10 / high-contrast / light mode this is a no-op.
+// Requires Theme_ApplyTitleBar to be called first for best effect.
+void Theme_ApplyMica(HWND Window);
+
 // Adapt all child controls in a dialog for the current theme.
 // In dark mode, disables visual styles for checkboxes/radio buttons so
 // WM_CTLCOLORSTATIC text coloring takes effect (themed buttons ignore
