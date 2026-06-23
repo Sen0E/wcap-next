@@ -2,8 +2,12 @@
 
 #include <stdlib.h>
 
+#include <commctrl.h>
 #include <dwmapi.h>
 #include <uxtheme.h>
+
+// Link comctl32.lib for SetWindowSubclass / RemoveWindowSubclass.
+#pragma comment(lib, "comctl32.lib")
 
 // DWM attribute for immersive dark mode title bar.
 // Value 20 on Windows 10 2004 (build 19041) and later (incl. Windows 11).
@@ -255,6 +259,127 @@ void Theme_ApplyMica(HWND Window)
 	DwmSetWindowAttribute(Window, DWMWA_SYSTEMBACKDROP_TYPE, &Value, sizeof(Value));
 }
 
+// Subclass ID for ComboBox dark-mode painting.
+#define THEME_COMBO_SUBCLASS_ID 0x54434D42 // 'TCMB'
+
+// Overpaint a classic ComboBox in dark mode:
+//   1. Erase the system's square border with dialog background
+//   2. Draw a rounded border (matches push button radius)
+//   3. Fill the drop-down arrow button with dark edit color
+//   4. Draw a light drop-down arrow
+// The system draws the arrow button using COLOR_BTNFACE which stays light in
+// dark mode and cannot be changed via WM_CTLCOLOR* messages.
+static void Theme__PaintComboDropDown(HWND Hwnd)
+{
+	RECT WinRect;
+	GetWindowRect(Hwnd, &WinRect);
+	int W = WinRect.right - WinRect.left;
+	int H = WinRect.bottom - WinRect.top;
+
+	HDC Dc = GetWindowDC(Hwnd);
+	if (!Dc) return;
+
+	int SavedDc = SaveDC(Dc);
+
+	int Border = 1;
+	int BtnW = GetSystemMetrics(SM_CXVSCROLL);
+
+	// 1. Erase the system square border by filling the frame area with
+	//    dialog background color. ExcludeClipRect keeps the inner client
+	//    area untouched.
+	ExcludeClipRect(Dc, Border, Border, W - Border, H - Border);
+	HBRUSH BgBrush = CreateSolidBrush(THEME_DARK_BG);
+	RECT FullRect = { 0, 0, W, H };
+	FillRect(Dc, &FullRect, BgBrush);
+	DeleteObject(BgBrush);
+
+	RestoreDC(Dc, SavedDc);
+	SavedDc = SaveDC(Dc);
+
+	// 2. Draw rounded border over the erased frame
+	HPEN BorderPen = CreatePen(PS_SOLID, 1, THEME_DARK_GROUPBOX);
+	HPEN OldPen = (HPEN)SelectObject(Dc, BorderPen);
+	HBRUSH OldBrush = (HBRUSH)SelectObject(Dc, GetStockObject(NULL_BRUSH));
+	RoundRect(Dc, 0, 0, W, H, 8, 8);
+	SelectObject(Dc, OldPen);
+	SelectObject(Dc, OldBrush);
+	DeleteObject(BorderPen);
+
+	RestoreDC(Dc, SavedDc);
+
+	// 3. Fill the drop-down button background (inside the border)
+	RECT BtnRect = { W - BtnW - Border, Border, W - Border, H - Border };
+	HBRUSH BtnBrush = CreateSolidBrush(THEME_DARK_EDIT_BG);
+	FillRect(Dc, &BtnRect, BtnBrush);
+	DeleteObject(BtnBrush);
+
+	// 4. Draw drop-down arrow (filled triangle pointing down)
+	BOOL Enabled = IsWindowEnabled(Hwnd);
+	COLORREF ArrowColor = Enabled ? THEME_DARK_TEXT : THEME_DARK_DISABLED_TEXT;
+
+	int Cx = BtnRect.left + BtnW / 2;
+	int Cy = BtnRect.top + (BtnRect.bottom - BtnRect.top) / 2;
+
+	POINT Arrow[3] =
+	{
+		{ Cx - 4, Cy - 2 },
+		{ Cx + 4, Cy - 2 },
+		{ Cx,     Cy + 3 },
+	};
+
+	HPEN Pen = CreatePen(PS_SOLID, 1, ArrowColor);
+	HPEN OldPen2 = (HPEN)SelectObject(Dc, Pen);
+	HBRUSH ArrowBrush = CreateSolidBrush(ArrowColor);
+	HBRUSH OldBrush2 = (HBRUSH)SelectObject(Dc, ArrowBrush);
+	Polygon(Dc, Arrow, 3);
+	SelectObject(Dc, OldPen2);
+	SelectObject(Dc, OldBrush2);
+	DeleteObject(Pen);
+	DeleteObject(ArrowBrush);
+
+	ReleaseDC(Hwnd, Dc);
+}
+
+static LRESULT CALLBACK Theme__ComboBoxSubclass(HWND Hwnd, UINT Msg,
+	WPARAM WParam, LPARAM LParam, UINT_PTR Id, DWORD_PTR RefData)
+{
+	(VOID)RefData;
+
+	BOOL DoPaint = Theme_IsDark() && !gTheme.HighContrast;
+
+	if (Msg == WM_PAINT)
+	{
+		// Let the system paint first, then overpaint the drop-down button
+		// and rounded border.
+		LRESULT Ret = DefSubclassProc(Hwnd, Msg, WParam, LParam);
+		if (DoPaint)
+		{
+			Theme__PaintComboDropDown(Hwnd);
+		}
+		return Ret;
+	}
+
+	if (Msg == WM_NCPAINT)
+	{
+		// Let the system paint the non-client area, then overpaint the border
+		// with our rounded version. This keeps the border consistent when the
+		// window is resized or activated/deactivated.
+		LRESULT Ret = DefSubclassProc(Hwnd, Msg, WParam, LParam);
+		if (DoPaint)
+		{
+			Theme__PaintComboDropDown(Hwnd);
+		}
+		return Ret;
+	}
+
+	if (Msg == WM_NCDESTROY)
+	{
+		RemoveWindowSubclass(Hwnd, Theme__ComboBoxSubclass, Id);
+	}
+
+	return DefSubclassProc(Hwnd, Msg, WParam, LParam);
+}
+
 void Theme_ApplyToDialogControls(HWND Dialog)
 {
 	// In high-contrast mode, keep visual styles enabled so controls match
@@ -322,6 +447,18 @@ void Theme_ApplyToDialogControls(HWND Dialog)
 			else if (lstrcmpW(ClassName, L"ComboBox") == 0)
 			{
 				SetWindowTheme(Child, DisableTheme ? L"" : NULL, DisableTheme ? L"" : NULL);
+				// Subclass to overpaint the drop-down arrow button, whose
+				// background (COLOR_BTNFACE) cannot be themed otherwise.
+				if (DisableTheme)
+				{
+					SetWindowSubclass(Child, Theme__ComboBoxSubclass,
+						THEME_COMBO_SUBCLASS_ID, 0);
+				}
+				else
+				{
+					RemoveWindowSubclass(Child, Theme__ComboBoxSubclass,
+						THEME_COMBO_SUBCLASS_ID);
+				}
 			}
 			else if (lstrcmpW(ClassName, L"ScrollBar") == 0)
 			{
