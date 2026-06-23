@@ -262,31 +262,55 @@ void Theme_ApplyMica(HWND Window)
 // Subclass ID for ComboBox dark-mode painting.
 #define THEME_COMBO_SUBCLASS_ID 0x54434D42 // 'TCMB'
 
-// Overpaint a classic ComboBox in dark mode:
-//   1. Erase the system's square border with dialog background
-//   2. Draw a rounded border (matches push button radius)
-//   3. Fill the drop-down arrow button with dark edit color
-//   4. Draw a light drop-down arrow
-// The system draws the arrow button using COLOR_BTNFACE which stays light in
-// dark mode and cannot be changed via WM_CTLCOLOR* messages.
+// Overpaint a classic ComboBox in dark mode to fix:
+//   - Square outer border → rounded border
+//   - Light drop-down button background → dark
+//   - Separator line between edit field and button → removed
+//   - White inner border around the edit field → removed
+//
+// The system draws these with COLOR_BTNFACE / COLOR_WINDOW which stay light
+// in dark mode and cannot be changed via WM_CTLCOLOR* messages.
 static void Theme__PaintComboDropDown(HWND Hwnd)
 {
+	// Use COMBOBOXINFO to get exact positions of the edit field and the
+	// drop-down button. This lets us erase the separator and inner border
+	// precisely without overpainting the edit text.
+	COMBOBOXINFO Cbi;
+	Cbi.cbSize = sizeof(Cbi);
+	BOOL HasInfo = GetComboBoxInfo(Hwnd, &Cbi);
+
 	RECT WinRect;
 	GetWindowRect(Hwnd, &WinRect);
 	int W = WinRect.right - WinRect.left;
 	int H = WinRect.bottom - WinRect.top;
 
+	int Border = 1;
+	int BtnW = GetSystemMetrics(SM_CXVSCROLL);
+
+	// Convert button rect from screen to window-relative coords.
+	RECT BtnRect;
+	if (HasInfo)
+	{
+		BtnRect.left   = Cbi.rcButton.left   - WinRect.left;
+		BtnRect.top    = Cbi.rcButton.top    - WinRect.top;
+		BtnRect.right  = Cbi.rcButton.right  - WinRect.left;
+		BtnRect.bottom = Cbi.rcButton.bottom - WinRect.top;
+	}
+	else
+	{
+		BtnRect.left   = W - BtnW - Border;
+		BtnRect.top    = Border;
+		BtnRect.right  = W - Border;
+		BtnRect.bottom = H - Border;
+	}
+
+	// ---- Non-client area: erase square border, draw rounded border ----
 	HDC Dc = GetWindowDC(Hwnd);
 	if (!Dc) return;
 
 	int SavedDc = SaveDC(Dc);
 
-	int Border = 1;
-	int BtnW = GetSystemMetrics(SM_CXVSCROLL);
-
-	// 1. Erase the system square border by filling the frame area with
-	//    dialog background color. ExcludeClipRect keeps the inner client
-	//    area untouched.
+	// Erase the system square border (frame area only)
 	ExcludeClipRect(Dc, Border, Border, W - Border, H - Border);
 	HBRUSH BgBrush = CreateSolidBrush(THEME_DARK_BG);
 	RECT FullRect = { 0, 0, W, H };
@@ -296,7 +320,7 @@ static void Theme__PaintComboDropDown(HWND Hwnd)
 	RestoreDC(Dc, SavedDc);
 	SavedDc = SaveDC(Dc);
 
-	// 2. Draw rounded border over the erased frame
+	// Draw rounded border
 	HPEN BorderPen = CreatePen(PS_SOLID, 1, THEME_DARK_GROUPBOX);
 	HPEN OldPen = (HPEN)SelectObject(Dc, BorderPen);
 	HBRUSH OldBrush = (HBRUSH)SelectObject(Dc, GetStockObject(NULL_BRUSH));
@@ -306,18 +330,63 @@ static void Theme__PaintComboDropDown(HWND Hwnd)
 	DeleteObject(BorderPen);
 
 	RestoreDC(Dc, SavedDc);
+	ReleaseDC(Hwnd, Dc);
 
-	// 3. Fill the drop-down button background (inside the border)
-	RECT BtnRect = { W - BtnW - Border, Border, W - Border, H - Border };
+	// ---- Client area: erase separator + inner border, fill button ----
+	HDC ClientDc = GetDC(Hwnd);
+	if (!ClientDc) return;
+
+	int SavedClient = SaveDC(ClientDc);
+
+	// Fill the drop-down button area with dark edit color
 	HBRUSH BtnBrush = CreateSolidBrush(THEME_DARK_EDIT_BG);
-	FillRect(Dc, &BtnRect, BtnBrush);
+	FillRect(ClientDc, &BtnRect, BtnBrush);
+
+	// Erase the separator line between the edit field and the button.
+	// The system draws a 1px vertical line at the left edge of the button.
+	RECT SepRect = { BtnRect.left, BtnRect.top, BtnRect.left + 1, BtnRect.bottom };
+	FillRect(ClientDc, &SepRect, BtnBrush);
 	DeleteObject(BtnBrush);
 
-	// 4. Draw drop-down arrow (filled triangle pointing down)
+	// Erase the white inner border around the edit field. The edit field
+	// (rcItem) is inset from the client area by ~1px; fill that gap with
+	// the edit background color so there's no light border.
+	if (HasInfo)
+	{
+		RECT EditRect;
+		EditRect.left   = Cbi.rcItem.left   - WinRect.left;
+		EditRect.top    = Cbi.rcItem.top    - WinRect.top;
+		EditRect.right  = Cbi.rcItem.right  - WinRect.left;
+		EditRect.bottom = Cbi.rcItem.bottom - WinRect.top;
+
+		HBRUSH EditBrush = CreateSolidBrush(THEME_DARK_EDIT_BG);
+
+		// Top edge gap
+		RECT Gap = { Border, Border, W - Border, EditRect.top };
+		FillRect(ClientDc, &Gap, EditBrush);
+		// Bottom edge gap
+		Gap.left = Border; Gap.top = EditRect.bottom;
+		Gap.right = BtnRect.left; Gap.bottom = H - Border;
+		FillRect(ClientDc, &Gap, EditBrush);
+		// Left edge gap
+		Gap.left = Border; Gap.top = EditRect.top;
+		Gap.right = EditRect.left; Gap.bottom = EditRect.bottom;
+		FillRect(ClientDc, &Gap, EditBrush);
+		// Right edge gap (between edit field and separator/button)
+		Gap.left = EditRect.right; Gap.top = EditRect.top;
+		Gap.right = BtnRect.left; Gap.bottom = EditRect.bottom;
+		FillRect(ClientDc, &Gap, EditBrush);
+
+		DeleteObject(EditBrush);
+	}
+
+	RestoreDC(ClientDc, SavedClient);
+
+	// Draw drop-down arrow (filled triangle pointing down)
 	BOOL Enabled = IsWindowEnabled(Hwnd);
 	COLORREF ArrowColor = Enabled ? THEME_DARK_TEXT : THEME_DARK_DISABLED_TEXT;
 
-	int Cx = BtnRect.left + BtnW / 2;
+	int Cx = BtnRect.left + (BtnRect.right - BtnRect.left) / 2;
 	int Cy = BtnRect.top + (BtnRect.bottom - BtnRect.top) / 2;
 
 	POINT Arrow[3] =
@@ -328,16 +397,16 @@ static void Theme__PaintComboDropDown(HWND Hwnd)
 	};
 
 	HPEN Pen = CreatePen(PS_SOLID, 1, ArrowColor);
-	HPEN OldPen2 = (HPEN)SelectObject(Dc, Pen);
+	HPEN OldPen2 = (HPEN)SelectObject(ClientDc, Pen);
 	HBRUSH ArrowBrush = CreateSolidBrush(ArrowColor);
-	HBRUSH OldBrush2 = (HBRUSH)SelectObject(Dc, ArrowBrush);
-	Polygon(Dc, Arrow, 3);
-	SelectObject(Dc, OldPen2);
-	SelectObject(Dc, OldBrush2);
+	HBRUSH OldBrush2 = (HBRUSH)SelectObject(ClientDc, ArrowBrush);
+	Polygon(ClientDc, Arrow, 3);
+	SelectObject(ClientDc, OldPen2);
+	SelectObject(ClientDc, OldBrush2);
 	DeleteObject(Pen);
 	DeleteObject(ArrowBrush);
 
-	ReleaseDC(Hwnd, Dc);
+	ReleaseDC(Hwnd, ClientDc);
 }
 
 static LRESULT CALLBACK Theme__ComboBoxSubclass(HWND Hwnd, UINT Msg,
@@ -668,7 +737,7 @@ BOOL Theme_DrawCheckBox(const DRAWITEMSTRUCT* Dis)
 	RECT R = Dis->rcItem;
 
 	BOOL Disabled  = (Dis->itemState & ODS_DISABLED)  != 0;
-	BOOL Selected  = (Dis->itemState & ODS_SELECTED)  != 0;
+	BOOL Pressed   = (Dis->itemState & ODS_SELECTED)  != 0;
 	BOOL Focused   = (Dis->itemState & ODS_FOCUS)     != 0;
 
 	// Detect original button type via saved prop (style was changed to
@@ -685,6 +754,12 @@ BOOL Theme_DrawCheckBox(const DRAWITEMSTRUCT* Dis)
 		return FALSE;
 	}
 
+	// Query the actual check state. ODS_SELECTED only reflects the
+	// mouse-pressed state, NOT the checked state — so a checkbox would
+	// appear unchecked after releasing the mouse without this query.
+	LRESULT CheckResult = SendMessageW(Dis->hwndItem, BM_GETCHECK, 0, 0);
+	BOOL Checked = (CheckResult == BST_CHECKED);
+
 	// Layout: square indicator on the left, text on the right.
 	// Indicator size scales with font height (~13px on default system font).
 	int BoxSize = 13;
@@ -693,7 +768,10 @@ BOOL Theme_DrawCheckBox(const DRAWITEMSTRUCT* Dis)
 
 	RECT Box = { BoxX, BoxY, BoxX + BoxSize, BoxY + BoxSize };
 
-	COLORREF BoxBg     = Selected ? RGB(0, 120, 215) : THEME_DARK_EDIT_BG;
+	// Checked state drives the indicator fill; Pressed adds a subtle
+	// highlight so the user gets feedback while holding the mouse.
+	COLORREF BoxBg     = Checked ? RGB(0, 120, 215) :
+	                     Pressed ? RGB(60, 60, 60) : THEME_DARK_EDIT_BG;
 	COLORREF BoxBorder = Focused ? RGB(0, 120, 215) : THEME_DARK_GROUPBOX;
 	COLORREF CheckMark = THEME_DARK_TEXT;
 	COLORREF TextColor = Disabled ? THEME_DARK_DISABLED_TEXT : THEME_DARK_TEXT;
@@ -714,7 +792,7 @@ BOOL Theme_DrawCheckBox(const DRAWITEMSTRUCT* Dis)
 		// Radio: circle
 		SelectObject(Dc, GetStockObject(NULL_BRUSH));
 		Ellipse(Dc, Box.left, Box.top, Box.right, Box.bottom);
-		if (Selected)
+		if (Checked)
 		{
 			SelectObject(Dc, BoxBrush);
 			int Inset = 3;
@@ -727,7 +805,7 @@ BOOL Theme_DrawCheckBox(const DRAWITEMSTRUCT* Dis)
 		// Checkbox: rounded square (radius 2px)
 		SelectObject(Dc, GetStockObject(NULL_BRUSH));
 		RoundRect(Dc, Box.left, Box.top, Box.right, Box.bottom, 4, 4);
-		if (Selected)
+		if (Checked)
 		{
 			// Draw checkmark inside the box
 			SelectObject(Dc, BoxBrush);
