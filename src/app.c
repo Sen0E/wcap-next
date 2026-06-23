@@ -191,7 +191,7 @@ static ID3D11Device* App_CreateDevice(AppState* App)
 		IDXGIAdapter_Release(Adapter);
 	}
 
-	if (flags & D3D11_CREATE_DEVICE_DEBUG)
+	if (Device && (flags & D3D11_CREATE_DEVICE_DEBUG))
 	{
 		ID3D11InfoQueue* Info;
 		if (SUCCEEDED(ID3D11Device_QueryInterface(Device, &IID_ID3D11InfoQueue, &Info)))
@@ -310,14 +310,15 @@ static void App_EncodeCapturedAudio(AppState* App)
 		{
 			const UINT32 SampleRate = App->Audio.Format->nSamplesPerSec;
 			const UINT32 BytesPerFrame = App->Audio.Format->nBlockAlign;
+			const UINT64 TickFreq = App->TickFreq.QuadPart;
 
-			// figure out how much time (100nsec units) and frame count to skip from current buffer
+			// figure out how much time and frame count to skip from current buffer
 			UINT64 TimeToSkip = App->Encoder.StartTime - Data.Time;
-			UINT32 FramesToSkip = (UINT32)((TimeToSkip * SampleRate - 1) / MF_UNITS_PER_SECOND + 1);
+			UINT32 FramesToSkip = (UINT32)((TimeToSkip * SampleRate - 1) / TickFreq + 1);
 			if (FramesToSkip < FramesToEncode)
 			{
 				// need to skip part of captured data
-				Data.Time += FramesToSkip * MF_UNITS_PER_SECOND / SampleRate;
+				Data.Time += FramesToSkip * TickFreq / SampleRate;
 				FramesToEncode -= FramesToSkip;
 				if (Data.Samples)
 				{
@@ -437,6 +438,7 @@ void App_CaptureMonitor(AppState* App)
 
 	if (!ScreenCapture_CreateForMonitor(&App->Capture, Device, Monitor, NULL))
 	{
+		ID3D11Device_Release(Device);
 		UI_ShowNotification(App->Window, L"无法录制所选显示器！", L"错误", NIIF_WARNING);
 		return;
 	}
@@ -576,6 +578,7 @@ void App_CaptureRegion(AppState* App)
 
 	if (!ScreenCapture_CreateForMonitor(&App->Capture, Device, App->RectMonitor, &Rect))
 	{
+		ID3D11Device_Release(Device);
 		UI_ShowNotification(App->Window, L"无法录制显示器！", L"错误", NIIF_WARNING);
 		App_CaptureRegionRelease(App);
 		return;
