@@ -58,3 +58,8 @@ INT_PTR Theme_HandleCtlColorForWindow(HWND Control, HDC Dc, UINT Msg);
 // Returns TRUE if handled (button was drawn), FALSE if default processing
 // should occur (light mode or non-button item).
 BOOL Theme_DrawButton(const DRAWITEMSTRUCT* Dis);
+
+// Handle WM_DRAWITEM for owner-drawn checkboxes in dark mode.
+// Returns TRUE if handled (checkbox was drawn), FALSE if default processing
+// should occur (light mode or non-checkbox item).
+BOOL Theme_DrawCheckBox(const DRAWITEMSTRUCT* Dis);

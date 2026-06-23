@@ -577,6 +577,10 @@ static LRESULT CALLBACK Config__DialogProc(HWND Window, UINT Message, WPARAM WPa
 	}
 	else if (Message == WM_DRAWITEM)
 	{
+		if (Theme_DrawCheckBox((const DRAWITEMSTRUCT*)LParam))
+		{
+			return TRUE;
+		}
 		if (Theme_DrawButton((const DRAWITEMSTRUCT*)LParam))
 		{
 			return TRUE;

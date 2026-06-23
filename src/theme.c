@@ -272,21 +272,25 @@ void Theme_ApplyToDialogControls(HWND Dialog)
 				LONG_PTR Style = GetWindowLongPtrW(Child, GWL_STYLE);
 				HANDLE Prop = GetPropW(Child, L"ThemeOrigStyle");
 
-				// Push buttons: classic rendering still draws the panel with
-				// COLOR_BTNFACE, ignoring WM_CTLCOLORBTN. Switch to owner-draw
-				// in dark mode so we fully control the appearance via
-				// WM_DRAWITEM. Save the original style so light mode can
-				// restore it.
+				// Push buttons and checkboxes/radios: classic rendering does
+				// not give us enough control over colors and shapes (push
+				// buttons ignore WM_CTLCOLORBTN; checkboxes draw square boxes).
+				// Switch to owner-draw in dark mode so we fully control the
+				// appearance via WM_DRAWITEM. Save the original style so light
+				// mode can restore it.
 				//
 				// NOTE: check the saved prop FIRST, not the current button
 				// type. In dark mode the type was already changed to
-				// BS_OWNERDRAW, so checking Type == BS_PUSHBUTTON would never
-				// match on the dark→light transition and the button would
+				// BS_OWNERDRAW, so checking the original type would never
+				// match on the dark→light transition and the control would
 				// stay owner-drawn (invisible in light mode).
 				if (DisableTheme)
 				{
 					LONG_PTR Type = Style & BS_TYPEMASK;
-					if (Prop == NULL && (Type == BS_PUSHBUTTON || Type == BS_DEFPUSHBUTTON))
+					BOOL Convert = (Prop == NULL) &&
+						(Type == BS_PUSHBUTTON || Type == BS_DEFPUSHBUTTON ||
+						 Type == BS_AUTOCHECKBOX || Type == BS_AUTORADIOBUTTON);
+					if (Convert)
 					{
 						SetPropW(Child, L"ThemeOrigStyle", (HANDLE)Style);
 						SetWindowLongPtrW(Child, GWL_STYLE,
@@ -511,6 +515,133 @@ BOOL Theme_DrawButton(const DRAWITEMSTRUCT* Dis)
 	{
 		InflateRect(&Inner, -2, -2);
 		DrawFocusRect(Dc, &Inner);
+	}
+
+	return TRUE;
+}
+
+BOOL Theme_DrawCheckBox(const DRAWITEMSTRUCT* Dis)
+{
+	if (!Theme_IsDark() || !Dis || Dis->CtlType != ODT_BUTTON)
+	{
+		return FALSE;
+	}
+
+	HDC Dc = Dis->hDC;
+	RECT R = Dis->rcItem;
+
+	BOOL Disabled  = (Dis->itemState & ODS_DISABLED)  != 0;
+	BOOL Selected  = (Dis->itemState & ODS_SELECTED)  != 0;
+	BOOL Focused   = (Dis->itemState & ODS_FOCUS)     != 0;
+
+	// Detect original button type via saved prop (style was changed to
+	// BS_OWNERDRAW). This distinguishes checkbox/radio from push buttons.
+	HANDLE Prop = GetPropW(Dis->hwndItem, L"ThemeOrigStyle");
+	if (!Prop)
+	{
+		return FALSE;
+	}
+	LONG_PTR OrigType = ((LONG_PTR)Prop) & BS_TYPEMASK;
+	BOOL IsRadio = (OrigType == BS_AUTORADIOBUTTON);
+	if (OrigType != BS_AUTOCHECKBOX && !IsRadio)
+	{
+		return FALSE;
+	}
+
+	// Layout: square indicator on the left, text on the right.
+	// Indicator size scales with font height (~13px on default system font).
+	int BoxSize = 13;
+	int BoxX = R.left + 2;
+	int BoxY = R.top + ((R.bottom - R.top) - BoxSize) / 2;
+
+	RECT Box = { BoxX, BoxY, BoxX + BoxSize, BoxY + BoxSize };
+
+	COLORREF BoxBg     = Selected ? RGB(0, 120, 215) : THEME_DARK_EDIT_BG;
+	COLORREF BoxBorder = Focused ? RGB(0, 120, 215) : THEME_DARK_GROUPBOX;
+	COLORREF CheckMark = THEME_DARK_TEXT;
+	COLORREF TextColor = Disabled ? THEME_DARK_DISABLED_TEXT : THEME_DARK_TEXT;
+
+	// Fill background of whole item with dialog bg (transparent look)
+	HBRUSH BgBrush = CreateSolidBrush(THEME_DARK_BG);
+	FillRect(Dc, &R, BgBrush);
+	DeleteObject(BgBrush);
+
+	// Draw indicator background
+	HBRUSH BoxBrush = CreateSolidBrush(BoxBg);
+	HBRUSH OldBrush  = (HBRUSH)SelectObject(Dc, BoxBrush);
+	HPEN   BorderPen = CreatePen(PS_SOLID, 1, BoxBorder);
+	HPEN   OldPen    = (HPEN)SelectObject(Dc, BorderPen);
+
+	if (IsRadio)
+	{
+		// Radio: circle
+		SelectObject(Dc, GetStockObject(NULL_BRUSH));
+		Ellipse(Dc, Box.left, Box.top, Box.right, Box.bottom);
+		if (Selected)
+		{
+			SelectObject(Dc, BoxBrush);
+			int Inset = 3;
+			Ellipse(Dc, Box.left + Inset, Box.top + Inset,
+				Box.right - Inset, Box.bottom - Inset);
+		}
+	}
+	else
+	{
+		// Checkbox: rounded square (radius 2px)
+		SelectObject(Dc, GetStockObject(NULL_BRUSH));
+		RoundRect(Dc, Box.left, Box.top, Box.right, Box.bottom, 4, 4);
+		if (Selected)
+		{
+			// Draw checkmark inside the box
+			SelectObject(Dc, BoxBrush);
+			// Fill the rounded box with accent color
+			RoundRect(Dc, Box.left, Box.top, Box.right, Box.bottom, 4, 4);
+			// Draw check mark (white on accent)
+			HPEN CheckPen = CreatePen(PS_SOLID, 2, CheckMark);
+			HPEN OldCheckPen = (HPEN)SelectObject(Dc, CheckPen);
+			SelectObject(Dc, GetStockObject(NULL_BRUSH));
+			MoveToEx(Dc, Box.left + 3, Box.top + 7, NULL);
+			LineTo(Dc, Box.left + 6, Box.top + 10);
+			LineTo(Dc, Box.left + 10, Box.top + 3);
+			SelectObject(Dc, OldCheckPen);
+			DeleteObject(CheckPen);
+		}
+	}
+
+	SelectObject(Dc, OldPen);
+	SelectObject(Dc, OldBrush);
+	DeleteObject(BorderPen);
+	DeleteObject(BoxBrush);
+
+	// Draw text to the right of the indicator
+	RECT TextRect = R;
+	TextRect.left = Box.right + 6;
+	TextRect.right = R.right;
+
+	WCHAR TextBuf[128];
+	int Len = GetWindowTextW(Dis->hwndItem, TextBuf, _countof(TextBuf));
+	if (Len > 0)
+	{
+		SetTextColor(Dc, TextColor);
+		SetBkMode(Dc, TRANSPARENT);
+		HFONT OldFont = (HFONT)SendMessageW(Dis->hwndItem, WM_GETFONT, 0, 0);
+		if (OldFont)
+		{
+			OldFont = (HFONT)SelectObject(Dc, OldFont);
+		}
+		DrawTextW(Dc, TextBuf, Len, &TextRect, DT_LEFT | DT_VCENTER | DT_SINGLELINE);
+		if (OldFont)
+		{
+			SelectObject(Dc, OldFont);
+		}
+	}
+
+	// Focus rectangle around the whole item (text + box)
+	if (Focused && !Disabled)
+	{
+		RECT FocusRect = R;
+		InflateRect(&FocusRect, -1, -1);
+		DrawFocusRect(Dc, &FocusRect);
 	}
 
 	return TRUE;
